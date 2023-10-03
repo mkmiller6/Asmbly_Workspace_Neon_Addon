@@ -1,42 +1,36 @@
-from flask import Flask, request, g, url_for, session
 from openPathUpdateSingle import openPathUpdateSingle
 from helpers import neon
-from google.cloud import 
-import requests
+
+import httpx
 import json
 import datetime
 
+from fastapi import FastAPI
 
-app = Flask(__name__)
+from gapps import CardService
+from gapps.cardservice import models
+from gapps.cardservice.utilities import decode_email, decode_user
+
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 
-#Pushes a general error reponse card to front of stack with inputed error text
-def pushErrorResponseCard(errorText):
-    responseCard = {
-                "renderActions": {
-                    "action": {
-                        "navigations": [
-                            {
-                                "pushCard": {
-                                    "sections": [
-                                        {
-                                            "collapsible": False,
-                                            "uncollapsible_widgets_count": 1,
-                                            "widgets": [
-                                                {
-                                                    "text_paragraph": {
-                                                        "text": errorText
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            }]
-                    }
-                }
-            }
-    return responseCard
+
+app = FastAPI(title='Neon Workspace Integration')
+
+
+#Creates a general error reponse card with inputed error text
+def createErrorResponseCard(errorText: str):
+    cardSection1TextParagraph1 = CardService.TextParagraph(text=errorText)
+
+    cardSection1 = CardService.CardSection(widget=cardSection1TextParagraph1)
+
+    card = CardService.CardBuilder(section=cardSection1)
+
+    return card.build()
 
 #Gets full Neon account from an email address
 #Output fields:
@@ -74,49 +68,44 @@ def getNeonAcctByEmail(accountEmail: str) -> dict:
 #Pushes card to front of stack with Neon ID of account with associated email address, otherwise tell user there
 #are no Neon accounts associated with that email
 @app.post('/getNeonId')
-def getNeonId():
-    acctEmail = request.form('gmail_email')
+async def getNeonId(gevent: models.GEvent):
+    with build('gmail', 'v1', credentials=gevent.authorizationEventObject.userOAuthToken) as gmailClient:
+        messageToken = gevent.gmail.accessToken
+        messageId = gevent.gmail.messageId
+
+        acctEmail =  await gmailClient.user().messages().get(
+            userId='me', 
+            id=messageId, 
+            accessToken=messageToken, 
+            format='metadata', 
+            metadataHeaders='From') \
+                .execute().get('payload').get('headers')[0].get('value')
+ 
     searchResult = getNeonAcctByEmail(acctEmail)
     if len(searchResult) == 1:
         accountName = searchResult[0]["First Name"] + \
             ' ' + searchResult[0]["Last Name"]
         accountID = searchResult[0]["Account ID"]
-        responseCard = {
-            "renderActions": {
-                "action": {
-                    "navigations": [
-                        {
-                            "pushCard": {"sections": [
-                                {
-                                    "header": "Results",
-                                    "collapsible": False,
-                                    "uncollapsible_widgets_count": 1,
-                                    "widgets": [
-                                        {
-                                            "decorated_text": {
-                                                "top_label": accountName,
-                                                "text": accountID,
-                                                "wrap_text": False
-                                            }
-                                        }
-                                    ]
-                                }]
-                            }
 
-                        }]
-                }
+        cardSection1DecoratedText1 = CardService.DecoratedText(
+            top_label=accountName,
+            text=accountID,
+            wrap_text=False
+        )
 
-            }
-        }
-        return json.dumps(responseCard)
+        cardSection1 = CardService.CardSection(widget=cardSection1DecoratedText1)
+
+        responseCard = CardService.CardBuilder(section=cardSection1).build()
+
+        return responseCard
     elif len(searchResult) > 1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     else:
         errorText = "<b>Error:</b> No Neon accounts found."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
 
 #Create the class home page and push to front of stack
 @app.post('/classHomePage')
@@ -229,6 +218,8 @@ def classHomePage():
             }
         }
     }
+
+
     return json.dumps(responseCard)
 
 #Push a card to the front of the stack that has all future classes of the searched Event Name. If a date is picked, 
