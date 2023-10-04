@@ -57,18 +57,18 @@ def getUserKeys(creds: Credentials):
 
     client = secretmanager.SecretManagerServiceClient()
 
-    N_APIkey = 'N_APIkey' + f'_{firstName}'
-    O_APIkey = 'O_APIkey' + f'_{firstName}'
-    O_APIuser = 'O_APIuser' + f'_{firstName}'
+    N_APIkey_search = 'N_APIkey' + f'_{firstName}'
+    O_APIkey_search = 'O_APIkey' + f'_{firstName}'
+    O_APIuser_search = 'O_APIuser' + f'_{firstName}'
 
     keys = {
-        N_APIkey: None, 
-        O_APIkey: None, 
-        O_APIuser: None,
+        'N_APIkey': N_APIkey_search, 
+        'O_APIkey': O_APIkey_search, 
+        'O_APIuser': O_APIuser_search,
         }
 
-    for key, _ in keys.items():
-        name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{key}/versions/latest"
+    for key, value in keys.items():
+        name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{value}/versions/latest"
         try:
             secret = client.access_secret_version(request={"name": name})
         except:
@@ -145,7 +145,9 @@ async def getNeonId(gevent: models.GEvent):
     apiKeys = getUserKeys(creds)
     
     acctEmail = await getConstituentEmail(gevent, creds)
-    searchResult = getNeonAcctByEmail(acctEmail)
+
+    searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+    
     if len(searchResult) == 1:
         accountName = searchResult[0]["First Name"] + \
             ' ' + searchResult[0]["Last Name"]
