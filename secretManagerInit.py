@@ -16,7 +16,7 @@ secrets = {
     "O_APIuser": O_APIuser,
 }
 
-def create_secret(project_id: str, secret_id: str, payload: str) -> secretmanager.CreateSecretRequest:
+def create_secret(project_id: str, secret_id: str, payload: str, user: str) -> secretmanager.CreateSecretRequest:
     """
     Create a new secret with the given name, then create a secret version. A secret is a logical wrapper
     around a collection of secret versions. Secret versions hold the actual
@@ -27,6 +27,11 @@ def create_secret(project_id: str, secret_id: str, payload: str) -> secretmanage
 
     # Build the resource name of the parent project.
     parent = f"projects/{project_id}"
+
+    # Append user to secret_id for Neon API keys, Openpath Users, and Openpath API keys.
+    # All other secrets are universal to all users.
+    if secret_id in ["N_APIkey", "O_APIkey", "O_APIuser"]:
+        secret_id += f"_{user}"
 
     # Create the secret.
     secret = client.create_secret(
