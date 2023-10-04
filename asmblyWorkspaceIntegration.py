@@ -11,7 +11,6 @@ from functools import lru_cache
 
 from gapps import CardService
 from gapps.cardservice import models
-from gapps.cardservice.utilities import decode_email, decode_user
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -51,8 +50,15 @@ def verifyGoogleToken(token):
     
     return True
 
+def decodeUser(token):
+    response = verify_oauth2_token(token, requests.Request(), CLIENT_ID)
+
+    userId = response.get('sub')
+
+    return userId
+
 @lru_cache()
-async def getConstituentEmail(gevent: models.GEvent, creds: Credentials):
+async def getFromGmailEmail(gevent: models.GEvent, creds: Credentials):
     
     with build('gmail', 'v1', credentials=creds) as gmailClient:
         messageToken = gevent.gmail.accessToken
@@ -70,7 +76,7 @@ async def getConstituentEmail(gevent: models.GEvent, creds: Credentials):
 
 
 @lru_cache()
-def getUserKeys(creds: Credentials):
+def getUserKeys(creds: Credentials, userId: str):
 
     with build('people', 'v1', credentials=creds) as peopleClient:
         user = peopleClient.people().get(
@@ -81,32 +87,23 @@ def getUserKeys(creds: Credentials):
 
     client = secretmanager.SecretManagerServiceClient()
 
-    N_APIkey_search = 'N_APIkey' + f'_{firstName}'
-    O_APIkey_search = 'O_APIkey' + f'_{firstName}'
-    O_APIuser_search = 'O_APIuser' + f'_{firstName}'
+    secret_id = firstName + userId
 
-    keys = {
-        'N_APIkey': N_APIkey_search, 
-        'O_APIkey': O_APIkey_search, 
-        'O_APIuser': O_APIuser_search,
-        }
+    name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{secret_id}/versions/latest"
+    try:
+        secret = client.access_secret_version(request={"name": name})
+    except:
+        return createErrorResponseCard("Secret not found. Please enter your access keys in settings.")
 
-    for key, value in keys.items():
-        name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{value}/versions/latest"
-        try:
-            secret = client.access_secret_version(request={"name": name})
-        except:
-            return createErrorResponseCard("Secret not found. Please enter your access keys in settings.")
+    # Verify payload checksum.
+    crc32c = google_crc32c.Checksum()
+    crc32c.update(secret.payload.data)
+    if secret.payload.data_crc32c != int(crc32c.hexdigest(), 16):
+        return createErrorResponseCard("Checksum failed.")
+    
+    payload = secret.payload.data.decode("UTF-8")
 
-        # Verify payload checksum.
-        crc32c = google_crc32c.Checksum()
-        crc32c.update(secret.payload.data)
-        if secret.payload.data_crc32c != int(crc32c.hexdigest(), 16):
-            return createErrorResponseCard("Checksum failed.")
-        
-        payload = secret.payload.data.decode("UTF-8")
-
-        keys[key] = payload
+    keys = json.loads(payload)
 
     return keys
 
@@ -171,10 +168,12 @@ async def getNeonId(gevent: models.GEvent):
         errorText = "<b>Error:</b> Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-
-    apiKeys = getUserKeys(creds)
     
-    acctEmail = await getConstituentEmail(gevent, creds)
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    apiKeys = getUserKeys(creds, userId)
+    
+    acctEmail = await getFromGmailEmail(gevent, creds)
 
     searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
 
