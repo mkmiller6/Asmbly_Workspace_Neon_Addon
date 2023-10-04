@@ -23,8 +23,6 @@ import google_crc32c
 
 app = FastAPI(title='Neon Workspace Integration')
 
-#TODO: Implement Google secrets manager lookup for neon api user variable to pull into environment
-
 GCLOUD_PROJECT_ID = os.environ.get('GCLOUD_PROJECT_ID')
 SERVICE_ACCT_EMAIL = os.environ.get('SERVICE_ACCT_EMAIL')
 NEON_API_USER = os.environ.get('N_APIUser')
@@ -48,7 +46,7 @@ async def getConstituentEmail(gevent: models.GEvent, creds: Credentials):
 
 
 @lru_cache()
-def getUserKeys(gevent: models.GEvent, creds: Credentials):
+def getUserKeys(creds: Credentials):
 
     with build('people', 'v1', credentials=creds) as peopleClient:
         user = peopleClient.people().get(
@@ -102,9 +100,9 @@ def createErrorResponseCard(errorText: str):
 
 #Gets full Neon account from an email address
 #Output fields:
-#179 is WaivervDate
+#179 is WaiverDate
 #182 is Facility Tour Date
-def getNeonAcctByEmail(accountEmail: str) -> dict:
+def getNeonAcctByEmail(accountEmail: str, N_APIkey: str, N_APIuser: str) -> dict:
     searchFields = f'''
     [
         {{
@@ -127,7 +125,7 @@ def getNeonAcctByEmail(accountEmail: str) -> dict:
     ]
     '''
 
-    response = neon.postAccountSearch(searchFields, outputFields)
+    response = neon.postAccountSearch(searchFields, outputFields, N_APIkey, N_APIuser)
 
     searchResults = response.get("searchResults")
 
@@ -139,20 +137,12 @@ def getNeonAcctByEmail(accountEmail: str) -> dict:
 async def getNeonId(gevent: models.GEvent):
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
-        if not creds.is_valid():
-            errorText = "<b>Error:</b> Credentials not valid."
-            responseCard = createErrorResponseCard(errorText)
-            return responseCard
     except:
         errorText = "<b>Error:</b> Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
-    
-
-
-
-    
+    apiKeys = getUserKeys(creds)
     
     acctEmail = await getConstituentEmail(gevent, creds)
     searchResult = getNeonAcctByEmail(acctEmail)

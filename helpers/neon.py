@@ -3,28 +3,30 @@ import base64
 import json
 import datetime
 
-from config import N_APIkey, N_APIuser
 from helpers.api import apiCall
 
-
-# Neon Account Info
-N_auth = f'{N_APIuser}:{N_APIkey}'
 N_baseURL = 'https://api.neoncrm.com/v2'
-N_signature = base64.b64encode(bytearray(N_auth.encode())).decode()
-N_headers = {'Content-Type': 'application/json',
-             'Authorization': f'Basic {N_signature}'}
-
 
 ###########################
 #####   NEON EVENTS   #####
 ###########################
 
+def getHeaders(N_APIkey, N_APIuser):
+    N_auth = f'{N_APIuser}:{N_APIkey}'
+    N_signature = base64.b64encode(bytearray(N_auth.encode())).decode()
+    N_headers = {'Content-Type': 'application/json',
+                'Authorization': f'Basic {N_signature}'}
+    return N_headers
+
 # Get list of custom fields for events
-def getEventCustomFields():
+def getEventCustomFields(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = '/customFields'
     queryParams = '?category=Event'
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseEventFields = apiCall(httpVerb, url, data, N_headers).json()
@@ -35,11 +37,14 @@ def getEventCustomFields():
 
 
 # Get list of event categories
-def getEventCategories():
+def getEventCategories(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = '/properties/eventCategories'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseCategories = apiCall(httpVerb, url, data, N_headers).json()
@@ -66,11 +71,14 @@ def getEventActiveCatNames(responseCategories):
 
 
 # Get possible search fields for POST to /events/search
-def getEventSearchFields():
+def getEventSearchFields(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = '/events/search/searchFields'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseSearchFields = apiCall(httpVerb, url, data, N_headers).json()
@@ -79,11 +87,14 @@ def getEventSearchFields():
 
 
 # Get possible output fields for POST to /events/search
-def getEventOutputFields():
+def getEventOutputFields(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = '/events/search/outputFields'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseOutputFields = apiCall(httpVerb, url, data, N_headers).json()
@@ -92,7 +103,7 @@ def getEventOutputFields():
 
 
 # Post search query to get back events (only gets 200 events, pagination not currently supported)
-def postEventSearch(searchFields, outputFields, page=0):
+def postEventSearch(searchFields, outputFields, N_APIkey, N_APIuser, page=0):
     httpVerb = 'POST'
     resourcePath = '/events/search'
     queryParams = ''
@@ -107,6 +118,9 @@ def postEventSearch(searchFields, outputFields, page=0):
     }}
     '''
 
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
     url = N_baseURL + resourcePath + queryParams
     responseEvents = apiCall(httpVerb, url, data, N_headers).json()
 
@@ -115,12 +129,15 @@ def postEventSearch(searchFields, outputFields, page=0):
 # Get registrations for a single event by event ID
 
 
-def getEventRegistrants(eventId):
+def getEventRegistrants(eventId, N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = f'/events/{eventId}/eventRegistrations'
     queryParams = ''
     # queryParams = '?page=0'
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     individualEvent = apiCall(httpVerb, url, data, N_headers).json()
@@ -142,11 +159,14 @@ def getEventRegistrantCount(registrantList):
 
 
 # Get individual accounts by account ID
-def getAccountIndividual(acctId):
+def getAccountIndividual(acctId, N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = f'/accounts/{acctId}'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseAccount = apiCall(httpVerb, url, data, N_headers).json()
@@ -156,11 +176,14 @@ def getAccountIndividual(acctId):
 # Get possible search fields for POST to /orders/search
 
 
-def getOrderSearchFields():
+def getOrderSearchFields(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = '/orders/search/searchFields'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseSearchFields = apiCall(httpVerb, url, data, N_headers).json()
@@ -169,11 +192,14 @@ def getOrderSearchFields():
 
 
 # Get possible output fields for POST to /events/search
-def getOrderOutputFields():
+def getOrderOutputFields(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = '/orders/search/outputFields'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseOutputFields = apiCall(httpVerb, url, data, N_headers).json()
@@ -183,7 +209,7 @@ def getOrderOutputFields():
 # Post search query to get back orders (only gets 200 events, pagination not currently supported)
 
 
-def postOrderSearch(searchFields, outputFields):
+def postOrderSearch(searchFields, outputFields, N_APIkey, N_APIuser):
     httpVerb = 'POST'
     resourcePath = '/orders/search'
     queryParams = ''
@@ -198,6 +224,9 @@ def postOrderSearch(searchFields, outputFields):
     }}
     '''
 
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
     url = N_baseURL + resourcePath + queryParams
     responseEvents = apiCall(httpVerb, url, data, N_headers).json()
 
@@ -206,11 +235,14 @@ def postOrderSearch(searchFields, outputFields):
 # Get possible search fields for POST to /accounts/search
 
 
-def getAccountSearchFields():
+def getAccountSearchFields(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = '/accounts/search/searchFields'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseSearchFields = apiCall(httpVerb, url, data, N_headers).json()
@@ -219,11 +251,14 @@ def getAccountSearchFields():
 
 
 # Get possible output fields for POST to /events/search
-def getAccountOutputFields():
+def getAccountOutputFields(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = '/accounts/search/outputFields'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseOutputFields = apiCall(httpVerb, url, data, N_headers).json()
@@ -233,7 +268,7 @@ def getAccountOutputFields():
 # Post search query to get back orders (only gets 200 events, pagination not currently supported)
 
 
-def postAccountSearch(searchFields, outputFields):
+def postAccountSearch(searchFields, outputFields, N_APIkey, N_APIuser):
     httpVerb = 'POST'
     resourcePath = '/accounts/search'
     queryParams = ''
@@ -248,13 +283,16 @@ def postAccountSearch(searchFields, outputFields):
     }}
     '''
 
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
     url = N_baseURL + resourcePath + queryParams
     responseEvents = apiCall(httpVerb, url, data, N_headers).json()
 
     return responseEvents
 
 
-def postEventRegistration(accountID, eventID, accountFirstName, accountLastName):
+def postEventRegistration(accountID, eventID, accountFirstName, accountLastName, N_APIkey, N_APIuser):
     httpVerb = 'POST'
     resourcePath = '/eventRegistrations'
     queryParams = ''
@@ -295,34 +333,44 @@ def postEventRegistration(accountID, eventID, accountFirstName, accountLastName)
         ]
     }
     data = json.dumps(data)
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
     url = N_baseURL + resourcePath + queryParams
     responseEvents = apiCall(httpVerb, url, data, N_headers).json()
 
     return responseEvents
 
-def getAccountEventRegistrations(neonId):
+def getAccountEventRegistrations(neonId, N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = f'/accounts/{neonId}/eventRegistrations'
     queryParams = '?sortColumn=registrationDateTime&sortDirection=DESC'
     data = ''
 
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
     url = N_baseURL + resourcePath + queryParams
     responseEvents = apiCall(httpVerb, url, data, N_headers).json()
 
     return responseEvents
 
-def getEvent(eventId):
+def getEvent(eventId, N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = f'/events/{eventId}'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseEvent = apiCall(httpVerb, url, data, N_headers).json()
 
     return responseEvent
 
-def cancelClass(registrationId):
+def cancelClass(registrationId, N_APIkey, N_APIuser):
     httpVerb = 'PATCH'
     resourcePath = f'/eventRegistrations/{registrationId}'
     queryParams = ''
@@ -339,23 +387,29 @@ def cancelClass(registrationId):
     }
     data = json.dumps(data)
 
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
     url = N_baseURL + resourcePath + queryParams
     responseStatus = apiCall(httpVerb, url, data, N_headers)
 
     return responseStatus
 
-def getEventTopics():
+def getEventTopics(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = f'/properties/eventTopics'
     queryParams = ''
     data = ''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     responseTopics = apiCall(httpVerb, url, data, N_headers).json()
 
     return responseTopics
 
-def eventTierCodePatch(classId, tier):
+def eventTierCodePatch(classId, tier, N_APIkey, N_APIuser):
     httpVerb = 'PATCH'
     resourcePath = f'/events/{classId}'
     queryParams = ''
@@ -365,12 +419,15 @@ def eventTierCodePatch(classId, tier):
     }}
     '''
 
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
     url = N_baseURL + resourcePath + queryParams
     response = apiCall(httpVerb, url, data, N_headers)
 
     return response
 
-def eventTimePatch(classId: str, eventStartTime: str='hh:mm AM/PM', eventEndTime: str="hh:mm AM/PM"):
+def eventTimePatch(classId: str, N_APIkey, N_APIuser, eventStartTime: str='hh:mm AM/PM', eventEndTime: str="hh:mm AM/PM"):
     httpVerb = 'PATCH'
     resourcePath = f'/events/{classId}'
     queryParams = ''
@@ -383,12 +440,15 @@ def eventTimePatch(classId: str, eventStartTime: str='hh:mm AM/PM', eventEndTime
     }}
     '''
 
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
     url = N_baseURL + resourcePath + queryParams
     response = apiCall(httpVerb, url, data, N_headers)
 
     return response
 
-def eventAttendeeCountPatch(classId: str, maxAttendees: int):
+def eventAttendeeCountPatch(classId: str, maxAttendees: int, N_APIkey, N_APIuser):
     httpVerb = 'PATCH'
     resourcePath = f'/events/{classId}'
     queryParams = ''
@@ -398,12 +458,15 @@ def eventAttendeeCountPatch(classId: str, maxAttendees: int):
     }}
     '''
 
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
     url = N_baseURL + resourcePath + queryParams
     response = apiCall(httpVerb, url, data, N_headers)
 
     return response
 
-def eventNamePatch(classId: str, newName: str):
+def eventNamePatch(classId: str, newName: str, N_APIkey, N_APIuser):
     httpVerb = 'PATCH'
     resourcePath = f'/events/{classId}'
     queryParams = ''
@@ -412,6 +475,9 @@ def eventNamePatch(classId: str, newName: str):
         "name": "{newName}"
     }}
     '''
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
 
     url = N_baseURL + resourcePath + queryParams
     response = apiCall(httpVerb, url, data, N_headers)
