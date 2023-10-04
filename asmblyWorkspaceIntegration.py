@@ -18,12 +18,14 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-
+from google.cloud import secretmanager
+import google_crc32c
 
 app = FastAPI(title='Neon Workspace Integration')
 
 #TODO: Implement Google secrets manager lookup for neon api user variable to pull into environment
 
+GCLOUD_PROJECT_ID = os.environ.get('GCLOUD_PROJECT_ID')
 SERVICE_ACCT_EMAIL = os.environ.get('SERVICE_ACCT_EMAIL')
 NEON_API_USER = os.environ.get('N_APIUser')
 
@@ -44,6 +46,47 @@ async def getConstituentEmail(gevent: models.GEvent, creds: Credentials):
         
     return acctEmail
 
+
+@lru_cache()
+def getUserKeys(gevent: models.GEvent, creds: Credentials):
+
+    with build('people', 'v1', credentials=creds) as peopleClient:
+        user = peopleClient.people().get(
+            resourceName='people/me',
+            personFields='names'
+        )
+        firstName = user.get('names')[0].get('givenName').lower()
+
+    client = secretmanager.SecretManagerServiceClient()
+
+    N_APIkey = 'N_APIkey' + f'_{firstName}'
+    O_APIkey = 'O_APIkey' + f'_{firstName}'
+    O_APIuser = 'O_APIuser' + f'_{firstName}'
+
+    keys = {
+        N_APIkey: None, 
+        O_APIkey: None, 
+        O_APIuser: None,
+        }
+
+    for key, _ in keys.items():
+        name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{key}/versions/latest"
+        try:
+            secret = client.access_secret_version(request={"name": name})
+        except:
+            return createErrorResponseCard("Secret not found. Please enter your access keys in settings.")
+
+        # Verify payload checksum.
+        crc32c = google_crc32c.Checksum()
+        crc32c.update(secret.payload.data)
+        if secret.payload.data_crc32c != int(crc32c.hexdigest(), 16):
+            return createErrorResponseCard("Checksum failed.")
+        
+        payload = secret.payload.data.decode("UTF-8")
+
+        keys[key] = payload
+
+    return keys
 
 #Creates a general error reponse card with inputed error text
 def createErrorResponseCard(errorText: str):
@@ -105,7 +148,9 @@ async def getNeonId(gevent: models.GEvent):
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
-    userEmail = decode_email(gevent.authorizationEventObject.userIdToken)
+    
+
+
 
     
     
