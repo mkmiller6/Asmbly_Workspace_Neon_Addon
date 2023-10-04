@@ -22,7 +22,10 @@ from googleapiclient.errors import HttpError
 
 app = FastAPI(title='Neon Workspace Integration')
 
+#TODO: Implement Google secrets manager lookup for neon api user variable to pull into environment
+
 SERVICE_ACCT_EMAIL = os.environ.get('SERVICE_ACCT_EMAIL')
+NEON_API_USER = os.environ.get('N_APIUser')
 
 @lru_cache()
 async def getConstituentEmail(gevent: models.GEvent, creds: Credentials):
