@@ -4,8 +4,10 @@ from helpers import neon
 import httpx
 import json
 import datetime
+import os
 
 from fastapi import FastAPI
+from functools import lru_cache
 
 from gapps import CardService
 from gapps.cardservice import models
@@ -18,8 +20,26 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 
-
 app = FastAPI(title='Neon Workspace Integration')
+
+SERVICE_ACCT_EMAIL = os.environ.get('SERVICE_ACCT_EMAIL')
+
+@lru_cache()
+async def getConstituentEmail(gevent: models.GEvent, creds: Credentials):
+    
+    with build('gmail', 'v1', credentials=creds) as gmailClient:
+        messageToken = gevent.gmail.accessToken
+        messageId = gevent.gmail.messageId
+
+        acctEmail = await gmailClient.user().messages().get(
+            userId='me', 
+            id=messageId, 
+            accessToken=messageToken, 
+            format='metadata', 
+            metadataHeaders='From') \
+                .execute().get('payload').get('headers')[0].get('value')
+        
+    return acctEmail
 
 
 #Creates a general error reponse card with inputed error text
@@ -30,7 +50,9 @@ def createErrorResponseCard(errorText: str):
 
     card = CardService.CardBuilder(section=cardSection1)
 
-    return card.build()
+    responseCard = card.build()
+
+    return responseCard
 
 #Gets full Neon account from an email address
 #Output fields:
@@ -69,18 +91,22 @@ def getNeonAcctByEmail(accountEmail: str) -> dict:
 #are no Neon accounts associated with that email
 @app.post('/getNeonId')
 async def getNeonId(gevent: models.GEvent):
-    with build('gmail', 'v1', credentials=gevent.authorizationEventObject.userOAuthToken) as gmailClient:
-        messageToken = gevent.gmail.accessToken
-        messageId = gevent.gmail.messageId
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+        if not creds.is_valid():
+            errorText = "<b>Error:</b> Credentials not valid."
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
 
-        acctEmail =  await gmailClient.user().messages().get(
-            userId='me', 
-            id=messageId, 
-            accessToken=messageToken, 
-            format='metadata', 
-            metadataHeaders='From') \
-                .execute().get('payload').get('headers')[0].get('value')
- 
+    userEmail = decode_email(gevent.authorizationEventObject.userIdToken)
+
+    
+    
+    acctEmail = await getConstituentEmail(gevent, creds)
     searchResult = getNeonAcctByEmail(acctEmail)
     if len(searchResult) == 1:
         accountName = searchResult[0]["First Name"] + \
