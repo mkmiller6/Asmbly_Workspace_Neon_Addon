@@ -3,6 +3,7 @@ from config import *
 # Import the Secret Manager client library.
 from google.cloud import secretmanager
 import google_crc32c
+import json
 
 # GCP project in which to store secrets in Secret Manager.
 project_id = "gmail-neon-op-integration"
@@ -13,7 +14,7 @@ secrets = {
     "O_APIuser": O_APIuser,
 }
 
-def create_secret(project_id: str, secret_id: str, payload: str, user: str) -> secretmanager.CreateSecretRequest:
+def create_secret(project_id: str, secret_id: str, payload: str) -> secretmanager.CreateSecretRequest:
     """
     Create a new secret with the given name, then create a secret version. A secret is a logical wrapper
     around a collection of secret versions. Secret versions hold the actual
@@ -24,11 +25,6 @@ def create_secret(project_id: str, secret_id: str, payload: str, user: str) -> s
 
     # Build the resource name of the parent project.
     parent = f"projects/{project_id}"
-
-    # Append user to secret_id for Neon API keys, Openpath Users, and Openpath API keys.
-    # All other secrets are universal to all users.
-    if secret_id in ["N_APIkey", "O_APIkey", "O_APIuser"]:
-        secret_id += f"_{user}"
 
     # Create the secret.
     secret = client.create_secret(
@@ -61,8 +57,8 @@ def create_secret(project_id: str, secret_id: str, payload: str, user: str) -> s
 
 
 def main():
-    for k, v in secrets.items():
-        create_secret(project_id, k, v, user="matthew")
+    keys = json.dumps(secrets)
+    create_secret(project_id, "matthew", keys)
 
 if __name__ == "__main__":
     main()
