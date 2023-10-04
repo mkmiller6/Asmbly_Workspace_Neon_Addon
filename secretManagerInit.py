@@ -9,9 +9,6 @@ project_id = "gmail-neon-op-integration"
 
 secrets = {
     "N_APIkey": N_APIkey,
-    "N_APIuser": N_APIuser,
-    "G_user": G_user,
-    "G_password": G_password,
     "O_APIkey": O_APIkey,
     "O_APIuser": O_APIuser,
 }

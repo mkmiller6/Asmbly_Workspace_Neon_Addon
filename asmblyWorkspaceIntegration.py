@@ -18,14 +18,38 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from google.oauth2.id_token import verify_oauth2_token, exceptions
+from google.auth.transport import requests
 from google.cloud import secretmanager
 import google_crc32c
 
 app = FastAPI(title='Neon Workspace Integration')
 
-GCLOUD_PROJECT_ID = os.environ.get('GCLOUD_PROJECT_ID')
-SERVICE_ACCT_EMAIL = os.environ.get('SERVICE_ACCT_EMAIL')
-NEON_API_USER = os.environ.get('N_APIUser')
+static_keys = json.loads(os.environ.get('static_keys'))
+
+GCLOUD_PROJECT_ID = static_keys.get("project_id")
+CLIENT_ID = static_keys.get("client_id")
+GSUITE_DOMAIN_NAME = static_keys.get("gsuite_domain")
+SERVICE_ACCT_EMAIL = static_keys.get("service_acct_email")
+NEON_API_USER = static_keys.get("N_APIuser")
+G_USER = static_keys.get("G_user")
+G_PASS = static_keys.get("G_password")
+
+def verifyGoogleToken(token):
+    try:
+        # Specify the CLIENT_ID of the app that accesses the backend:
+        idinfo = verify_oauth2_token(token, requests.Request(), CLIENT_ID)
+
+        if idinfo['hd'] != GSUITE_DOMAIN_NAME:
+            return False
+        
+    except ValueError:
+        # Invalid token
+        return False
+    except exceptions.GoogleAuthError:
+        return False
+    
+    return True
 
 @lru_cache()
 async def getConstituentEmail(gevent: models.GEvent, creds: Credentials):
@@ -135,6 +159,12 @@ def getNeonAcctByEmail(accountEmail: str, N_APIkey: str, N_APIuser: str) -> dict
 #are no Neon accounts associated with that email
 @app.post('/getNeonId')
 async def getNeonId(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
@@ -147,7 +177,7 @@ async def getNeonId(gevent: models.GEvent):
     acctEmail = await getConstituentEmail(gevent, creds)
 
     searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
-    
+
     if len(searchResult) == 1:
         accountName = searchResult[0]["First Name"] + \
             ' ' + searchResult[0]["Last Name"]

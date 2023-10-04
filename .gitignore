@@ -6,3 +6,4 @@ include
 pyvenv.cfg
 config.py
 .vscode
+secret_values.json
