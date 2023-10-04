@@ -65,7 +65,7 @@ def create_secret(project_id: str, secret_id: str, payload: str, user: str) -> s
 
 def main():
     for k, v in secrets.items():
-        create_secret(project_id, k, v)
+        create_secret(project_id, k, v, user="matthew")
 
 if __name__ == "__main__":
     main()
