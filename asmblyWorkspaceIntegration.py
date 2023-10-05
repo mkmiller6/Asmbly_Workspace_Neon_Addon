@@ -5,6 +5,7 @@ import httpx
 import json
 import datetime
 import os
+import time
 
 from fastapi import FastAPI
 from functools import lru_cache
@@ -40,6 +41,9 @@ def verifyGoogleToken(token):
         idinfo = verify_oauth2_token(token, requests.Request(), CLIENT_ID)
 
         if idinfo['hd'] != GSUITE_DOMAIN_NAME:
+            return False
+
+        if idinfo.get('email') != SERVICE_ACCT_EMAIL:
             return False
         
     except ValueError:
@@ -204,118 +208,114 @@ async def getNeonId(gevent: models.GEvent):
 
 #Create the class home page and push to front of stack
 @app.post('/classHomePage')
-def classHomePage():
-    responseCard = {
-        "renderActions": {
-            "action": {
-                "navigations": [
-                    {
-                        "pushCard": {
-                            "sections": [
-                                    {
-                                        "header": "Add Registration",
-                                        "collapsible": False,
-                                        "uncollapsible_widgets_count": 1,
-                                        "widgets": [
-                                            {
-                                                "text_input": {
-                                                    "label": "Class Name (required)",
-                                                    "name": "className"
-                                                }
-                                            },
-                                            {
-                                                "date_time_picker": {
-                                                    "label": "Pick a date (optional)",
-                                                    "name": "classDatePicker",
-                                                    "value_ms_epoch": 1514775600,
-                                                    "type": "DATE_ONLY"
-                                                }
-                                            },
-                                            {
-                                                "button_list": {
-                                                    "buttons": [
-                                                        {
-                                                            "disabled": False,
-                                                            "text": "Search Classes",
-                                                            "on_click": {
-                                                                "action": {
-                                                                    "function": url_for('searchClasses')
-                                                                }
-                                                            },
-                                                            "color": {
-                                                                "red": "0.04",
-                                                                "green": "0.40",
-                                                                "blue": "0.51"
-                                                            }
-                                                        }
-                                                    ]
-                                                }
-                                            }
-                                        ]
-                                    },
-                                {
-                                    "header": "Cancel Registration",
-                                    "collapsible": False,
-                                    "uncollapsible_widgets_count": 1,
-                                    "widgets": [
-                                        {
-                                            "button_list": {
-                                                "buttons": [
-                                                    {
-                                                        "disabled": False,
-                                                        "text": "Cancel Registration",
-                                                        "on_click": {
-                                                            "action": {
-                                                                "function": url_for('getAcctRegClassCancel')
-                                                            }
-                                                        },
-                                                        "color": {
-                                                            "red": "0.04",
-                                                            "green": "0.40",
-                                                            "blue": "0.51"
-                                                        }
-                                                    }
-                                                ]
-                                            }
-                                        }
-                                    ]
-                                        },
-                                {
-                                    "header": "Refund Registration",
-                                    "collapsible": False,
-                                    "uncollapsible_widgets_count": 1,
-                                    "widgets": [
-                                        {
-                                            "button_list": {
-                                                "buttons": [
-                                                    {
-                                                        "disabled": False,
-                                                        "text": "Refund Registration",
-                                                        "on_click": {
-                                                            "action": {
-                                                                "function": url_for('getAcctRegClassRefund')
-                                                            }
-                                                        },
-                                                        "color": {
-                                                            "red": "0.04",
-                                                            "green": "0.40",
-                                                            "blue": "0.51"
-                                                        }
-                                                    }
-                                                ]
-                                            }
-                                        }
-                                    ]
-                                        }
-                            ]
-                        }
-                    }]
-            }
-        }
-    }
+def classHomePage(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    nowInMs = int(time.time() * 1000)
 
+    cardHeader1 = CardService.CardHeader(
+        title="Classes",
+        image_style=CardService.ImageStyle.CIRCLE
+    )
 
-    return json.dumps(responseCard)
+    cardSection1TextInput1 = CardService.TextInput(
+        field_name="className",
+        title="Class Name",
+        multiline=False,
+    )
+
+    cardSection1DatePicker1 = CardService.DatePicker(
+        field_name = "start_date",
+        title= "Start Date",
+        value_in_ms_since_epoch = nowInMs
+    )
+
+    cardSection1DatePicker2 = CardService.DatePicker(
+        field_name = "end_date",
+        title= "End Date",
+        value_in_ms_since_epoch = nowInMs
+    )
+
+    cardSection1ButtonList1Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('searchClasses'),
+    )
+
+    cardSection1ButtonList1Button1 = CardService.TextButton(
+        text="Search",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action=cardSection1ButtonList1Button1Action1
+    )
+        
+    cardSection1ButtonList1 = CardService.ButtonSet(
+        button=cardSection1ButtonList1Button1
+    )
+
+    cardSection1 = CardService.CardSection(
+        header="Add Registration",
+        widget=cardSection1TextInput1,
+        widget=cardSection1DatePicker1,
+        widget=cardSection1DatePicker2,
+        widget=cardSection1ButtonList1,
+    )
+
+    cardSection2DecoratedText1Icon1 = CardService.IconImage(
+        icon=CardService.Icon.TICKET,
+    )
+        
+    cardSection2DecoratedText1Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('getAcctRegClassCancel'),
+    )
+
+    cardSection2DecoratedText1Button1 = CardService.TextButton(
+        text="Cancel",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action=cardSection2DecoratedText1Button1Action1
+    )
+
+    cardSection2DecoratedText1 = CardService.DecoratedText(
+        text="Cancel a Registration",
+        start_icon=cardSection2DecoratedText1Icon1,
+        button=cardSection2DecoratedText1Button1,
+    )
+
+    cardSection2 = CardService.CardSection(
+        widget=cardSection2DecoratedText1
+    )
+
+    cardSection3DecoratedText1Icon1 = CardService.IconImage(
+        icon=CardService.Icon.DOLLAR,
+    )
+
+    cardSection3DecoratedText1Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('getAcctRegClassRefund'),
+    )
+
+    cardSection3DecoratedText1Button1 = CardService.TextButton(
+        text="Refund",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action=cardSection3DecoratedText1Button1Action1
+    )
+
+    cardSection3DecoratedText1 = CardService.DecoratedText(
+        text="Refund a Registration",
+        start_icon=cardSection3DecoratedText1Icon1,
+        button=cardSection3DecoratedText1Button1,
+    )
+
+    cardSection3 = CardService.CardSection(
+        widget=cardSection3DecoratedText1
+    )
+
+    card = CardService.CardBuilder(
+        header=cardHeader1,
+        sections=[cardSection1, cardSection2, cardSection3]
+    )
+
+    return card.build()
 
 #Push a card to the front of the stack that has all future classes of the searched Event Name. If a date is picked, 
 #only classes on that date will be returned.

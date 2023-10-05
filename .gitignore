@@ -7,3 +7,5 @@ pyvenv.cfg
 config.py
 .vscode
 secret_values.json
+temp_json.json
+AppsScriptCards
