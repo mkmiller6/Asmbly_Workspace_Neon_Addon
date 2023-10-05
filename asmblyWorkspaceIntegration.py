@@ -486,71 +486,71 @@ def getAcctRegClassCancel(gevent: models.GEvent):
         neonID = searchResult[0]['Account ID']
         try:
             classDict = json.loads(neon.getAccountEventRegistrations(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER))
-            today = datetime.datetime.today()
-            upcomingClasses = []
-            for event in classDict["eventRegistrations"]:
-                registrationID = event["id"]
-                eventID = event["eventId"]
-                regStatus = event["tickets"][0]["attendees"][0]["registrationStatus"]
-                eventInfo = neon.getEvent(eventID)
-                eventDate = datetime.datetime.fromisoformat(eventInfo["eventDates"]["startDate"]).date()
-                eventName = eventInfo["name"]
-                if eventDate - today >= 0 and regStatus == "SUCCEEDED":
-                    upcomingClasses.append({"regID":registrationID, "eventID":eventID, "eventName":eventName, "startDate": eventInfo["eventDates"]["startDate"]})
-            
-            if not len(upcomingClasses):
-                errorText = "No upcoming classes found."
-                responseCard = createErrorResponseCard(errorText)
-                return responseCard
-            
-            widgets = []
-
-            cardHeader1 = CardService.Header(
-                title = "Cancel Classes",
-                image_style = CardService.ImageStyle.CIRCLE,
-            )
-
-            iter = enumerate(upcomingClasses)
-        
-            for _, upcomingClass in iter:
-                cardSection1DecoratedText1Button1Action1 = CardService.Action(
-                    function_name = app.url_path_for('classCancel'),
-                )
-                cardSection1DecoratedText1Button1 = CardService.TextButton(
-                    text = "Cancel",
-                    text_button_style=CardService.TextButtonStyle.TEXT,
-                    action = cardSection1DecoratedText1Button1Action1
-                )
-                cardSection1DecoratedText1 = CardService.DecoratedText(
-                    text = upcomingClass["eventName"],
-                    top_label = upcomingClass["regID"],
-                    buttom_label = upcomingClass["startDate"],
-                    wrap_text = True,
-                    button = cardSection1DecoratedText1Button1,
-                )
-
-                widgets.append(cardSection1DecoratedText1)
-
-                if iter.__next__:
-                    cardSection1Divider1 = CardService.Divider()
-                    widgets.append(cardSection1Divider1)
-
-            cardSection1 = CardService.CardSection(
-                header = "Upcoming Classes",
-                widgets = widgets,
-            )            
-
-            card = CardService.CardBuilder(
-                header = cardHeader1,
-                sections = [cardSection1]
-            )
-
-            return card.build()    
-                
         except:
             errorText = "<b>Error:</b> Unable to find classes. Account may not have registered for any classes. Alternaively, check your authentication or use the Neon website."
             responseCard = createErrorResponseCard(errorText)
             return responseCard
+        today = datetime.datetime.today()
+        upcomingClasses = []
+        for event in classDict["eventRegistrations"]:
+            registrationID = event["id"]
+            eventID = event["eventId"]
+            regStatus = event["tickets"][0]["attendees"][0]["registrationStatus"]
+            eventInfo = neon.getEvent(eventID)
+            eventDate = datetime.datetime.fromisoformat(eventInfo["eventDates"]["startDate"]).date()
+            eventName = eventInfo["name"]
+            if eventDate - today >= 0 and regStatus == "SUCCEEDED":
+                upcomingClasses.append({"regID":registrationID, "eventID":eventID, "eventName":eventName, "startDate": eventInfo["eventDates"]["startDate"]})
+        
+        if not len(upcomingClasses):
+            errorText = "No upcoming classes found."
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
+        
+        widgets = []
+
+        cardHeader1 = CardService.Header(
+            title = "Cancel Classes",
+            image_style = CardService.ImageStyle.CIRCLE,
+        )
+
+        iter = enumerate(upcomingClasses)
+    
+        for _, upcomingClass in iter:
+            cardSection1DecoratedText1Button1Action1 = CardService.Action(
+                function_name = app.url_path_for('classCancel'),
+            )
+            cardSection1DecoratedText1Button1 = CardService.TextButton(
+                text = "Cancel",
+                text_button_style=CardService.TextButtonStyle.TEXT,
+                action = cardSection1DecoratedText1Button1Action1
+            )
+            cardSection1DecoratedText1 = CardService.DecoratedText(
+                text = upcomingClass["eventName"],
+                top_label = upcomingClass["regID"],
+                buttom_label = upcomingClass["startDate"],
+                wrap_text = True,
+                button = cardSection1DecoratedText1Button1,
+            )
+
+            widgets.append(cardSection1DecoratedText1)
+
+            if iter.__next__:
+                cardSection1Divider1 = CardService.Divider()
+                widgets.append(cardSection1Divider1)
+
+        cardSection1 = CardService.CardSection(
+            header = "Upcoming Classes",
+            widgets = widgets,
+        )            
+
+        card = CardService.CardBuilder(
+            header = cardHeader1,
+            sections = [cardSection1]
+        )
+
+        return card.build()    
+                
     elif len(searchResult) >1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
@@ -561,58 +561,74 @@ def getAcctRegClassCancel(gevent: models.GEvent):
         return responseCard
     
     
-
+#TODO:
 #@app.post('/getAcctRegClassRefund')
 
 #Cancels user's registration in class. RegistrationID for given registration is pulled from top label of widget on 
 # /getAcctRegClassCancel card
 @app.post('/classCancel')
-def classCancel():
-    acctEmail = request.form('gmail_email')
-    searchResult = getNeonAcctByEmail(acctEmail)
-    if len(searchResult) == 1:
-        neonID = searchResult[0]['Account ID']
-    else:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
-        responseCard = createErrorResponseCard(errorText)
-        return responseCard
-    regId = request.json('decorated_txt_top_label')
+def classCancel(gevent: models.GEvent):
+    regId = gevent.commonEventObject.formInputs.get('decorated_txt_top_label')
+    className = gevent.commonEventObject.formInputs.get('decorated_txt')
+    classDate = gevent.commonEventObject.formInputs.get('decorated_txt_bottom_label')
+
+    cardSection1TextParagraph1 = CardService.TextParagraph(
+        text = f"Are you sure you want to cancel the registration for {className} on {classDate}?"
+    )
+
+    cardSection1ButtonList1Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('classCancelConfirm'),
+    )
+
+    cardSection1ButtonList1Button1 = CardService.TextButton(
+        text = "Yes",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        action = cardSection1ButtonList1Button1Action1
+    )
+
+    cardSection1ButtonList1Button2Action1 = CardService.Action(
+        function_name = app.url_path_for('classCancelCancel'),
+    )
+    
+    cardSection1ButtonList1Button2 = CardService.TextButton(
+        text = "No",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        action = cardSection1ButtonList1Button2Action1
+    )
+    
+    cardSection1ButtonList1 = CardService.ButtonSet(
+        buttons = [cardSection1ButtonList1Button1, cardSection1ButtonList1Button2]
+    )
+
+    cardSection1 = CardService.CardSection(
+        header = "Confirmation",
+        widgets = [cardSection1TextParagraph1, cardSection1ButtonList1]
+    )
+
+    card = CardService.CardBuilder(
+        section=cardSection1
+    )
+
+    return card.build()
+
+@app.post('/classCancelConfirm')
+def classCancelConfirm(gevent: models.GEvent):
+    regId = gevent.commonEventObject.formInputs.get('decorated_txt_top_label')
     try:
         cancelResponse = neon.cancelClass(regId)
-        if cancelResponse.status_code == 200 or 222 or 204:
-            responseCard = {
-                    "renderActions": {
-                        "action": {
-                            "navigations": [
-                                {
-                                    "pushCard": {
-                                        "sections": [
-                                            {
-                                                "collapsible": False,
-                                                "uncollapsible_widgets_count": 1,
-                                                "widgets": [
-                                                    {
-                                                        "text_paragraph": {
-                                                            "text": "<b>Registration Canceled</b>"
-                                                        }
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                }]
-                        }
-                    }
-                }
-            return responseCard 
-        else:
-            errorText = f"<b>Error:</b> Cancelation failed with status code {cancelResponse.status_code}. Use Neon to cancel registration."
-            responseCard = createErrorResponseCard(errorText)
-            return responseCard
     except:
         errorText = "<b>Error:</b> Cancelation failed. Check your authentication or use the Neon website."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
+    if cancelResponse.status_code == 200 or 222 or 204:
+          
+ 
+        return card.build()
+    else:
+        errorText = f"<b>Error:</b> Cancelation failed with status code {cancelResponse.status_code}. Use Neon to cancel registration."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
 
 
 
