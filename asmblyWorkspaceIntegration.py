@@ -229,13 +229,13 @@ def classHomePage(gevent: models.GEvent):
     )
 
     cardSection1DatePicker1 = CardService.DatePicker(
-        field_name = "start_date",
+        field_name = "startDate",
         title= "Start Date",
         value_in_ms_since_epoch = nowInMs
     )
 
     cardSection1DatePicker2 = CardService.DatePicker(
-        field_name = "end_date",
+        field_name = "endDate",
         title= "End Date",
         value_in_ms_since_epoch = nowInMs
     )
@@ -327,8 +327,8 @@ def searchClasses():
         eventName = request.json["commonEventObject"]["formInputs"]["className"]["stringInputs"]["value"][0]
     else:
         errorText = "<b>Error:</b> Event name is required."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     if request.json["commonEventObject"]["formInputs"]["classDatePicker"]["dateInput"]["msSinceEpoch"]:
         #This will give UTC time - need to convert to CST
         eventStartDate = datetime.datetime.utcfromtimestamp(request.json["commonEventObject"]["formInputs"]["classDatePicker"]["dateInput"]["msSinceEpoch"]).isoformat()
@@ -395,15 +395,15 @@ def searchClasses():
                             }
 
                 responseCard["renderActions"]["action"]["navigations"][0]["pushCard"]["sections"][0]["widgets"].append(newWidget)
-            return json.dumps(responseCard)
+            return responseCard
         else:
             errorText = "No classes found. Check your spelling or try a different date."
-            responseCard = pushErrorResponseCard(errorText)
-            return json.dumps(responseCard)
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
     except:
         errorText = "<b>Error:</b> Unable to find classes. Check your authentication or use the Neon website."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
 
 #Registers the active gmail user for the selected class with a $0 price. Pulls the eventID from the bottom label of the
 #previous card
@@ -414,12 +414,12 @@ def classReg():
     searchResult = getNeonAcctByEmail(acctEmail)
     if len(searchResult) == 0:
         errorText = "<b>Error:</b> No Neon accounts found."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     elif len(searchResult) > 1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     else:
         accountFirstName = searchResult[0]["First Name"]
         accountLastName = searchResult[0]["Last Name"]
@@ -450,23 +450,42 @@ def classReg():
                     }
                 }
             }
-            return json.dumps(responseCard)
+            return responseCard
         except:
             errorText = "<b>Error:</b> Registration failed. Use Neon to register individual."
-            responseCard = pushErrorResponseCard(errorText)
-            return json.dumps(responseCard)
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
 
 
 #Pushes card to front of stack showing all classes the user is currrently registered for. Each class is shown
 # as its own widget with a corresponding button to cancel the registration for that class.
 @app.post('/getAcctRegClassCancel')
-def getAcctRegClassCancel():
-    acctEmail = request.form('gmail_email')
-    searchResult = getNeonAcctByEmail(acctEmail)
+def getAcctRegClassCancel(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    apiKeys = getUserKeys(creds, userId)
+    
+    acctEmail = getFromGmailEmail(gevent, creds)
+
+    searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+
     if len(searchResult) == 1:
         neonID = searchResult[0]['Account ID']
         try:
-            classDict = json.loads(neon.getAccountEventRegistrations(neonID))
+            classDict = json.loads(neon.getAccountEventRegistrations(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER))
             today = datetime.datetime.today()
             upcomingClasses = []
             for event in classDict["eventRegistrations"]:
@@ -476,64 +495,70 @@ def getAcctRegClassCancel():
                 eventInfo = neon.getEvent(eventID)
                 eventDate = datetime.datetime.fromisoformat(eventInfo["eventDates"]["startDate"]).date()
                 eventName = eventInfo["name"]
-                if eventDate - today >= 0:
-                    upcomingClasses.append({"regID":registrationID, "eventID":eventID, "regStatus":regStatus, "eventName":eventName})
+                if eventDate - today >= 0 and regStatus == "SUCCEEDED":
+                    upcomingClasses.append({"regID":registrationID, "eventID":eventID, "eventName":eventName, "startDate": eventInfo["eventDates"]["startDate"]})
             
-            if len(upcomingClasses > 0):
-                responseCard = {
-                    "renderActions": {
-                        "action": {
-                            "navigations": [
-                                {
-                                    "pushCard": {
-                                        "sections": [
-                                            {
-                                                "collapsible": False,
-                                                "uncollapsible_widgets_count": 1,
-                                                "widgets": []
-                                            }
-                                        ]
-                                    }
-                                }]
-                        }
-                    }
-                }
-                for event in upcomingClasses:
-                    newWidget = {
-                                    "decorated_text": {
-                                        "top_label": event["regID"],
-                                        "text": event["eventName"],
-                                        "bottom_label": event["regStatus"],
-                                        "wrap_text": True,
-                                        "button": {
-                                            "text": "Cancel",
-                                            "on_click": {
-                                                "action": {
-                                                    "function": url_for('classCancel')
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                    responseCard["renderActions"]["action"]["navigations"][0]["pushCard"]["sections"][0]["widgets"].append(newWidget)
-                return json.dumps(responseCard)
-            else:
+            if not len(upcomingClasses):
                 errorText = "No upcoming classes found."
-                responseCard = pushErrorResponseCard(errorText)
-                return json.dumps(responseCard)
+                responseCard = createErrorResponseCard(errorText)
+                return responseCard
+            
+            widgets = []
+
+            cardHeader1 = CardService.Header(
+                title = "Cancel Classes",
+                image_style = CardService.ImageStyle.CIRCLE,
+            )
+
+            iter = enumerate(upcomingClasses)
+        
+            for _, upcomingClass in iter:
+                cardSection1DecoratedText1Button1Action1 = CardService.Action(
+                    function_name = app.url_path_for('classCancel'),
+                )
+                cardSection1DecoratedText1Button1 = CardService.TextButton(
+                    text = "Cancel",
+                    text_button_style=CardService.TextButtonStyle.TEXT,
+                    action = cardSection1DecoratedText1Button1Action1
+                )
+                cardSection1DecoratedText1 = CardService.DecoratedText(
+                    text = upcomingClass["eventName"],
+                    top_label = upcomingClass["regID"],
+                    buttom_label = upcomingClass["startDate"],
+                    wrap_text = True,
+                    button = cardSection1DecoratedText1Button1,
+                )
+
+                widgets.append(cardSection1DecoratedText1)
+
+                if iter.__next__:
+                    cardSection1Divider1 = CardService.Divider()
+                    widgets.append(cardSection1Divider1)
+
+            cardSection1 = CardService.CardSection(
+                header = "Upcoming Classes",
+                widgets = widgets,
+            )            
+
+            card = CardService.CardBuilder(
+                header = cardHeader1,
+                sections = [cardSection1]
+            )
+
+            return card.build()    
+                
         except:
             errorText = "<b>Error:</b> Unable to find classes. Account may not have registered for any classes. Alternaively, check your authentication or use the Neon website."
-            responseCard = pushErrorResponseCard(errorText)
-            return json.dumps(responseCard)
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
     elif len(searchResult) >1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     else:
         errorText = "<b>Error:</b> No Neon accounts found."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     
     
 
@@ -549,8 +574,8 @@ def classCancel():
         neonID = searchResult[0]['Account ID']
     else:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     regId = request.json('decorated_txt_top_label')
     try:
         cancelResponse = neon.cancelClass(regId)
@@ -579,15 +604,15 @@ def classCancel():
                         }
                     }
                 }
-            return json.dumps(responseCard) 
+            return responseCard 
         else:
             errorText = f"<b>Error:</b> Cancelation failed with status code {cancelResponse.status_code}. Use Neon to cancel registration."
-            responseCard = pushErrorResponseCard(errorText)
-            return json.dumps(responseCard)
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
     except:
         errorText = "<b>Error:</b> Cancelation failed. Check your authentication or use the Neon website."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
 
 
 
@@ -655,15 +680,15 @@ def checkAccess():
             }
         }
     }
-        return json.dumps(responseCard)
+        return responseCard
     elif len(searchResult) > 1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     else:
         errorText = "<b>Error:</b> No Neon accounts found."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     
     
     
@@ -701,19 +726,19 @@ def updateOP():
                         }
                     }
                 }
-            return json.dumps(responseCard)
+            return responseCard
         else:
             errorText = "Account has not completed all access requirements. Use the Check Access button to find out what's missing."
-            responseCard = pushErrorResponseCard(errorText)
-            return json.dumps(responseCard)
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
     elif len(searchResult) > 1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
     else:
         errorText = "<b>Error:</b> No Neon accounts found."
-        responseCard = pushErrorResponseCard(errorText)
-        return json.dumps(responseCard)
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
 
 
 #@app.post('/settings')
