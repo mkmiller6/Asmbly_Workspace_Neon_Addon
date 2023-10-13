@@ -568,9 +568,19 @@ def getAcctRegClassCancel(gevent: models.GEvent):
 # /getAcctRegClassCancel card
 @app.post('/classCancel')
 def classCancel(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
     regId = gevent.commonEventObject.formInputs.get('decorated_txt_top_label')
     className = gevent.commonEventObject.formInputs.get('decorated_txt')
     classDate = gevent.commonEventObject.formInputs.get('decorated_txt_bottom_label')
+
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    os.environ[f"current_class_id_{userId}"] = regId
 
     cardSection1TextParagraph1 = CardService.TextParagraph(
         text = f"Are you sure you want to cancel the registration for {className} on {classDate}?"
@@ -613,15 +623,44 @@ def classCancel(gevent: models.GEvent):
 
 @app.post('/classCancelConfirm')
 def classCancelConfirm(gevent: models.GEvent):
-    regId = gevent.commonEventObject.formInputs.get('decorated_txt_top_label')
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
     try:
-        cancelResponse = neon.cancelClass(regId)
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+    
+    regId = os.environ[f"current_class_id_{userId}"]
+
+    apiKeys = getUserKeys(creds, userId)
+
+    try:
+        cancelResponse = neon.cancelClass(regId, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
     except:
         errorText = "<b>Error:</b> Cancelation failed. Check your authentication or use the Neon website."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     if cancelResponse.status_code == 200 or 222 or 204:
-          
+        cardSection1TextParagraph1 = CardService.TextParagraph(
+            text = f"Successfully canceled registration."
+        )
+
+        cardSection1 = CardService.CardSection(
+            header = "Confirmed",
+            widget = cardSection1TextParagraph1
+        )
+
+        card = CardService.CardBuilder(
+            section=cardSection1
+        )
  
         return card.build()
     else:
