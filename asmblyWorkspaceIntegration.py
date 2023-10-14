@@ -6,6 +6,7 @@ import json
 import datetime
 import os
 import time
+import pytz
 
 from fastapi import FastAPI
 from functools import lru_cache
@@ -312,7 +313,8 @@ def classHomePage(gevent: models.GEvent):
 
     card = CardService.CardBuilder(
         header=cardHeader1,
-        sections=[cardSection1, cardSection2, cardSection3]
+        sections=[cardSection1, cardSection2, cardSection3],
+        name = "classHomePage"
     )
 
     return card.build()
@@ -322,21 +324,39 @@ def classHomePage(gevent: models.GEvent):
 #Every event is returned as its own widget with corresponding button. Clicking that button invokes /classReg to register 
 #the account for that class
 @app.post('/searchClasses')
-def searchClasses():
-    if request.json["commonEventObject"]["formInputs"]["className"]["stringInputs"]["value"][0]:
-        eventName = request.json["commonEventObject"]["formInputs"]["className"]["stringInputs"]["value"][0]
+def searchClasses(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    apiKeys = getUserKeys(creds, userId)
+    
+    if gevent.commonEventObject.formInputs["className"]["stringInputs"]["value"][0]:
+        eventName = gevent.commonEventObject.formInputs["className"]["stringInputs"]["value"][0]
     else:
         errorText = "<b>Error:</b> Event name is required."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-    if request.json["commonEventObject"]["formInputs"]["classDatePicker"]["dateInput"]["msSinceEpoch"]:
+    if gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"] and gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]:
         #This will give UTC time - need to convert to CST
-        eventStartDate = datetime.datetime.utcfromtimestamp(request.json["commonEventObject"]["formInputs"]["classDatePicker"]["dateInput"]["msSinceEpoch"]).isoformat()
-        operator = "EQUAL"
-    else:
-        eventStartDate = datetime.date.today().isoformat()
-        operator = "GREATER_AND_EQUAL"
-    searchFields = [
+        eventStartDateUTC = datetime.datetime.utcfromtimestamp(gevent.commonEventObject.formInputs["classDatePicker"]["dateInput"]["msSinceEpoch"])
+        eventStartDate = eventStartDateUTC.astimezone(tz = pytz.timezone("America/Chicago")).isoformat()
+
+        eventEndDateUTC = datetime.datetime.utcfromtimestamp(gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"])
+        eventEndDate = eventEndDateUTC.astimezone(tz = pytz.timezone("America/Chicago")).isoformat()
+
+        searchFields = [
         {
             "field": "Event Name",
             "operator": "CONTAIN",
@@ -344,9 +364,63 @@ def searchClasses():
         },
         {
             "field": "Event Start Date",
-            "operator": operator,
+            "operator": "GREATER_AND_EQUAL",
+            "value": eventStartDate
+        },
+        {
+            "field": "Event End Date",
+            "operator": "LESS_AND_EQUAL",
+            "value": eventEndDate
+        }]
+    
+    elif gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"]:
+        eventStartDateUTC = datetime.datetime.utcfromtimestamp(gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"])
+        eventStartDate = eventStartDateUTC.astimezone(tz = pytz.timezone("America/Chicago")).isoformat()
+
+        searchFields = [
+        {
+            "field": "Event Name",  
+            "operator": "CONTAIN",
+            "value": eventName
+        },
+        {
+            "field": "Event Start Date",
+            "operator": "GREATER_AND_EQUAL",
+            "value": eventStartDate
+        }
+        ]
+
+    elif gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]:
+        eventEndDateUTC = datetime.datetime.utcfromtimestamp(gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"])
+        eventEndDate = eventEndDateUTC.astimezone(tz = pytz.timezone("America/Chicago")).isoformat()
+
+        searchFields = [
+        {
+            "field": "Event Name",
+            "operator": "CONTAIN",
+            "value": eventName
+        },
+        {
+            "field": "Event End Date",
+            "operator": "LESS_AND_EQUAL",
+            "value": eventEndDate
+        }
+        ]
+    else:
+        eventStartDate = datetime.date.today().isoformat()
+
+        searchFields = [
+        {
+            "field": "Event Name",
+            "operator": "CONTAIN",
+            "value": eventName
+        },
+        {
+            "field": "Event Start Date",
+            "operator": "GREATER_AND_EQUAL",
             "value": eventStartDate
         }]
+
     searchFields = json.dumps(searchFields)
     outputFields = [
         "Event ID",
@@ -356,54 +430,56 @@ def searchClasses():
     ]
     outputFields = json.dumps(outputFields)
     try:
-        classResults = neon.postEventSearch(searchFields, outputFields)
-        if len(classResults["searchResults"] > 0):
-            responseCard = {
-                "renderActions": {
-                    "action": {
-                        "navigations": [
-                            {
-                                "pushCard": {
-                                    "sections": [
-                                        {
-                                            "collapsible": False,
-                                            "uncollapsible_widgets_count": 1,
-                                            "widgets": []
-                                        }
-                                    ]
-                                }
-                            }]
-                    }
-                }
-            }
-            for result in classResults["searchResults"]:
-                newWidget = {
-                                "decorated_text": {
-                                    "top_label": result["Event Name"],
-                                    "text": result["Event ID"],
-                                    "bottom_label": result["Event Start Date"],
-                                    "wrap_text": True,
-                                    "button": {
-                                        "text": "Register",
-                                        "on_click": {
-                                            "action": {
-                                                "function": url_for('classReg')
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                responseCard["renderActions"]["action"]["navigations"][0]["pushCard"]["sections"][0]["widgets"].append(newWidget)
-            return responseCard
-        else:
-            errorText = "No classes found. Check your spelling or try a different date."
-            responseCard = createErrorResponseCard(errorText)
-            return responseCard
+        classResults = neon.postEventSearch(searchFields, outputFields, apiKeys["N_APIkey"], apiKeys["N_APIuser"])
     except:
         errorText = "<b>Error:</b> Unable to find classes. Check your authentication or use the Neon website."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
+    
+    if len(classResults["searchResults"] > 0):
+        responseCard = {
+            "renderActions": {
+                "action": {
+                    "navigations": [
+                        {
+                            "pushCard": {
+                                "sections": [
+                                    {
+                                        "collapsible": False,
+                                        "uncollapsible_widgets_count": 1,
+                                        "widgets": []
+                                    }
+                                ]
+                            }
+                        }]
+                }
+            }
+        }
+        for result in classResults["searchResults"]:
+            newWidget = {
+                            "decorated_text": {
+                                "top_label": result["Event Name"],
+                                "text": result["Event ID"],
+                                "bottom_label": result["Event Start Date"],
+                                "wrap_text": True,
+                                "button": {
+                                    "text": "Register",
+                                    "on_click": {
+                                        "action": {
+                                            "function": url_for('classReg')
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+            responseCard["renderActions"]["action"]["navigations"][0]["pushCard"]["sections"][0]["widgets"].append(newWidget)
+        return responseCard
+    else:
+        errorText = "No classes found. Check your spelling or try a different date."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
 
 #Registers the active gmail user for the selected class with a $0 price. Pulls the eventID from the bottom label of the
 #previous card
@@ -546,7 +622,8 @@ def getAcctRegClassCancel(gevent: models.GEvent):
 
         card = CardService.CardBuilder(
             header = cardHeader1,
-            sections = [cardSection1]
+            sections = [cardSection1],
+            name = "cancelClassListCard"
         )
 
         return card.build()    
@@ -597,7 +674,7 @@ def classCancel(gevent: models.GEvent):
     )
 
     cardSection1ButtonList1Button2Action1 = CardService.Action(
-        function_name = app.url_path_for('classCancelCancel'),
+        function_name = popCard(),
     )
     
     cardSection1ButtonList1Button2 = CardService.TextButton(
@@ -616,7 +693,8 @@ def classCancel(gevent: models.GEvent):
     )
 
     card = CardService.CardBuilder(
-        section=cardSection1
+        section=cardSection1,
+        name = "classCancelCard"
     )
 
     return card.build()
@@ -648,18 +726,43 @@ def classCancelConfirm(gevent: models.GEvent):
         errorText = "<b>Error:</b> Cancelation failed. Check your authentication or use the Neon website."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-    if cancelResponse.status_code == 200 or 222 or 204:
+    if cancelResponse.status_code in range(200, 300):
         cardSection1TextParagraph1 = CardService.TextParagraph(
             text = f"Successfully canceled registration."
         )
 
+        cardSection1ButtonList1Button1Action1 = CardService.Action(
+            function_name = popToClassPage(),
+        )
+
+        cardSection1ButtonList1Button1 = CardService.TextButton(
+            text = "Return to Class Page",
+            text_button_style=CardService.TextButtonStyle.TEXT,
+            action = cardSection1ButtonList1Button1Action1
+        )
+
+        cardSection1ButtonList1Button2Action1 = CardService.Action(
+            function_name = popToHome(),
+        )
+        
+        cardSection1ButtonList1Button2 = CardService.TextButton(
+            text = "Return to Home Page",
+            text_button_style=CardService.TextButtonStyle.TEXT,
+            action = cardSection1ButtonList1Button2Action1
+        )
+        
+        cardSection1ButtonList1 = CardService.ButtonSet(
+            buttons = [cardSection1ButtonList1Button1, cardSection1ButtonList1Button2]
+        )
+
         cardSection1 = CardService.CardSection(
             header = "Confirmed",
-            widget = cardSection1TextParagraph1
+            widgets = [cardSection1TextParagraph1, cardSection1ButtonList1]
         )
 
         card = CardService.CardBuilder(
-            section=cardSection1
+            section=cardSection1,
+            name = "classCancelConfirmationCard"
         )
  
         return card.build()
@@ -670,6 +773,39 @@ def classCancelConfirm(gevent: models.GEvent):
 
 
 
+def popCard():
+
+    popOneCard = CardService.Navigation().popCard()
+
+    response = CardService.ActionResponseBuilder(
+        navigation = popOneCard
+    )
+
+    return response
+
+
+def popToClassPage():
+    returnToClassPage = CardService.Navigation().popToNamedCard(
+        card_name  = "classHomePage"
+    )
+
+    response = CardService.ActionResponseBuilder(
+        navigation = returnToClassPage,
+        state_changed = True
+    )
+
+    return response 
+
+
+def popToHome():
+    returnToHome = CardService.Navigation().popToRoot()
+
+    response = CardService.ActionResponseBuilder(
+        navigation = returnToHome,
+        state_changed = True
+    )
+
+    return response
 
 #@app.post('/classRefund')
 
