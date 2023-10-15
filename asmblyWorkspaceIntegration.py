@@ -393,6 +393,7 @@ def searchClasses(gevent: models.GEvent):
     elif gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]:
         eventEndDateUTC = datetime.datetime.utcfromtimestamp(gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"])
         eventEndDate = eventEndDateUTC.astimezone(tz = pytz.timezone("America/Chicago")).isoformat()
+        eventStartDate = datetime.date.today().isoformat()
 
         searchFields = [
         {
@@ -404,6 +405,11 @@ def searchClasses(gevent: models.GEvent):
             "field": "Event End Date",
             "operator": "LESS_AND_EQUAL",
             "value": eventEndDate
+        },
+        {
+            "field": "Event Start Date",
+            "operator": "GREATER_AND_EQUAL",
+            "value": eventStartDate
         }
         ]
     else:
@@ -458,15 +464,15 @@ def searchClasses(gevent: models.GEvent):
         for result in classResults["searchResults"]:
             newWidget = {
                             "decorated_text": {
-                                "top_label": result["Event Name"],
-                                "text": result["Event ID"],
+                                "top_label": result["Event ID"],
+                                "text": result["Event Name"],
                                 "bottom_label": result["Event Start Date"],
                                 "wrap_text": True,
                                 "button": {
                                     "text": "Register",
                                     "on_click": {
                                         "action": {
-                                            "function": url_for('classReg')
+                                            "function": app.url_path_for('classReg')
                                         }
                                     }
                                 }
@@ -484,10 +490,30 @@ def searchClasses(gevent: models.GEvent):
 #Registers the active gmail user for the selected class with a $0 price. Pulls the eventID from the bottom label of the
 #previous card
 @app.post('/classReg')
-def classReg():
-    acctEmail = request.form('gmail_email')
-    eventID = request.json('decorated_txt_bottom_label')
-    searchResult = getNeonAcctByEmail(acctEmail)
+async def classReg(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    apiKeys = getUserKeys(creds, userId)
+    
+    acctEmail = await getFromGmailEmail(gevent, creds)
+
+    searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+
+    eventID = gevent.commonEventObject.formInputs.get('decorated_txt_top_label')
+
     if len(searchResult) == 0:
         errorText = "<b>Error:</b> No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
@@ -502,36 +528,21 @@ def classReg():
         accountID = searchResult[0]["Account ID"]
         try:
             neon.postEventRegistration(accountID, eventID, accountFirstName, accountLastName)
-            responseCard = {
-                "renderActions": {
-                    "action": {
-                        "navigations": [
-                            {
-                                "pushCard": {
-                                    "sections": [
-                                        {
-                                            "collapsible": False,
-                                            "uncollapsible_widgets_count": 1,
-                                            "widgets": [
-                                                {
-                                                    "text_paragraph": {
-                                                        "text": "<b>Successfully registered</b>"
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            }]
-                    }
-                }
-            }
-            return responseCard
         except:
             errorText = "<b>Error:</b> Registration failed. Use Neon to register individual."
             responseCard = createErrorResponseCard(errorText)
             return responseCard
+        
+        cardSection1Paragraph1 = CardService.TextParagraph(text="<b>Successfully registered</b>")
 
+        cardSection1 = CardService.CardSection(widget=cardSection1Paragraph1)
+
+        card = CardService.CardBuilder(section=cardSection1)
+
+        responseCard = card.build()
+
+        return responseCard
+        
 
 #Pushes card to front of stack showing all classes the user is currrently registered for. Each class is shown
 # as its own widget with a corresponding button to cancel the registration for that class.
