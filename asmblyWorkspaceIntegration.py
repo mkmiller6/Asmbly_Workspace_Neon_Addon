@@ -821,80 +821,86 @@ def popToHome():
 #@app.post('/classRefund')
 
 @app.post('/checkAccess')
-def checkAccess():
-    acctEmail = request.form('gmail_email')
-    searchResult = getNeonAcctByEmail(acctEmail)
-    if len(searchResult) == 1:
-        neonID = searchResult[0]['Account ID']
-        accountName = searchResult[0]["First Name"] + \
-            ' ' + searchResult[0]["Last Name"]
-        if waiverDate := searchResult[0]['WaiverDate']:
-            waiverBoolean = True
-        else:
-            waiverBoolean = False
-        if tourDate := searchResult[0]['FacilityTourDate']:
-            orientBoolean = True
-        else:
-            orientBoolean = False
-        if activeMem := searchResult[0]['Membership Start Date']:
-            memBoolean = True
-        else:
-            memBoolean = False
-        responseCard = {
-        "renderActions": {
-            "action": {
-                "navigations": [
-                    {
-                        "pushCard": {
-                            "sections": [
-                                {
-                                    "collapsible": False,
-                                    "uncollapsible_widgets_count": 1,
-                                    "widgets": [
-                                        {
-                                            "selection_input": {
-                                                "label": f'''Account Name: {accountName}; Account ID: {neonID}''',
-                                                "name": "checkList",
-                                                "items": [
-                                                    {
-                                                        "text": "Waiver",
-                                                        "value": "1",
-                                                        "selected": waiverBoolean
-                                                    },
-                                                    {
-                                                        "text": "Orientation/Facility Tour",
-                                                        "value": "2",
-                                                        "selected": orientBoolean
-                                                    },
-                                                    {
-                                                        "text": "Active Membership",
-                                                        "value": "3",
-                                                        "selected": memBoolean
-                                                    }
-                                                ],
-                                                "type": "CHECK_BOX"
-                                            }
-                                        }
-                                    ]
-                                }
-                            ]
-                        }}]
-            }
-        }
-    }
+def checkAccess(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
         return responseCard
-    elif len(searchResult) > 1:
+
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    apiKeys = getUserKeys(creds, userId)
+    
+    acctEmail = getFromGmailEmail(gevent, creds)
+
+    searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+
+    if len(searchResult) > 1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-    else:
+    elif len(searchResult) == 0:
         errorText = "<b>Error:</b> No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
+    neonID = searchResult[0]['Account ID']
+    accountName = searchResult[0]["First Name"] + \
+        ' ' + searchResult[0]["Last Name"]
     
-    
+    waiverBoolean = False
+    if searchResult[0]['WaiverDate']:
+        waiverBoolean = True
 
+    orientBoolean = False
+    if searchResult[0]['FacilityTourDate']:
+        orientBoolean = True
+
+    memBoolean = False
+    if searchResult[0]['Membership Start Date']:
+        memBoolean = True
+
+    cardSection1SelectionInput1 = CardService.SelectionInput(
+        field_name = "currentAccessRequirements",
+        title = "Current Access Requirements",
+        type = CardService.SelectionInputType.CHECK_BOX,
+        item = [
+            {
+                "text": "Waiver",
+                "value": "1",
+                "selected": waiverBoolean
+            },
+            {
+                "text": "Orientation/Facility Tour",
+                "value": "2",
+                "selected": orientBoolean
+            },
+            {
+                "text": "Active Membership",
+                "value": "3",
+                "selected": memBoolean
+            }
+        ]
+    )
+
+    cardSection1 = CardService.CardSection(
+        widget = cardSection1SelectionInput1,
+        header = f"{accountName} - {neonID}"
+    )
+
+    card = CardService.CardBuilder(
+        section=cardSection1
+    )
+
+    return card.build()
 
 @app.post('/updateOP')
 def updateOP():
