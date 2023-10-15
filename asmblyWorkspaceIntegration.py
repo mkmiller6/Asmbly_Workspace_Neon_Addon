@@ -156,7 +156,7 @@ def createErrorResponseCard(errorText: str):
 
     cardSection1 = CardService.CardSection(widget=cardSection1TextParagraph1)
 
-    card = CardService.CardBuilder(section=cardSection1)
+    card = CardService.CardBuilder(section=[cardSection1])
 
     responseCard = card.build()
 
@@ -233,7 +233,7 @@ async def getNeonId(gevent: models.GEvent):
 
         cardSection1 = CardService.CardSection(widget=cardSection1DecoratedText1)
 
-        responseCard = CardService.CardBuilder(section=cardSection1).build()
+        responseCard = CardService.CardBuilder(section=[cardSection1]).build()
 
         return responseCard
     elif len(searchResult) > 1:
@@ -575,7 +575,7 @@ async def classReg(gevent: models.GEvent):
 
         cardSection1 = CardService.CardSection(widget=cardSection1Paragraph1)
 
-        card = CardService.CardBuilder(section=cardSection1)
+        card = CardService.CardBuilder(section=[cardSection1])
 
         responseCard = card.build()
 
@@ -742,7 +742,7 @@ def classCancel(gevent: models.GEvent):
     )
 
     card = CardService.CardBuilder(
-        section=cardSection1,
+        section=[cardSection1],
         name = "classCancelCard"
     )
 
@@ -810,7 +810,7 @@ def classCancelConfirm(gevent: models.GEvent):
         )
 
         card = CardService.CardBuilder(
-            section=cardSection1,
+            section=[cardSection1],
             name = "classCancelConfirmationCard"
         )
  
@@ -935,7 +935,7 @@ def checkAccess(gevent: models.GEvent):
     )
 
     card = CardService.CardBuilder(
-        section=cardSection1
+        section=[cardSection1]
     )
 
     return card.build()
@@ -990,7 +990,7 @@ def updateOP(gevent: models.GEvent):
     )
 
     card = CardService.CardBuilder(
-        section=cardSection1
+        section=[cardSection1]
     )
 
     responseCard = card.build()
@@ -1130,6 +1130,7 @@ def submitSettings(gevent: models.GEvent):
     responseCard = card.build()
 
     return responseCard
+
 #@app.post('/contextualHome')
 
 #@app.post('/home')
