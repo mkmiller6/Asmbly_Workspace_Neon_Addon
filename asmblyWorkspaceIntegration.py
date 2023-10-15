@@ -903,51 +903,61 @@ def checkAccess(gevent: models.GEvent):
     return card.build()
 
 @app.post('/updateOP')
-def updateOP():
-    acctEmail = request.form('gmail_email')
-    searchResult = getNeonAcctByEmail(acctEmail)
-    if len(searchResult) == 1:
-        neonID = searchResult[0]['Account ID']
-        if searchResult[0]['WaiverDate'] and searchResult[0]['FacilityTourDate'] and searchResult[0]['Membership Start Date']:
-            openPathUpdateSingle(neonID)
-            responseCard = {
-                    "renderActions": {
-                        "action": {
-                            "navigations": [
-                                {
-                                    "pushCard": {
-                                        "sections": [
-                                            {
-                                                "collapsible": False,
-                                                "uncollapsible_widgets_count": 1,
-                                                "widgets": [
-                                                    {
-                                                        "text_paragraph": {
-                                                            "text": "<b>Openpath Updated</b>"
-                                                        }
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                }]
-                        }
-                    }
-                }
-            return responseCard
-        else:
-            errorText = "Account has not completed all access requirements. Use the Check Access button to find out what's missing."
-            responseCard = createErrorResponseCard(errorText)
-            return responseCard
-    elif len(searchResult) > 1:
+def updateOP(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    apiKeys = getUserKeys(creds, userId)
+    
+    acctEmail = getFromGmailEmail(gevent, creds)
+
+    searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+
+    if len(searchResult) > 1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-    else:
+    elif len(searchResult) == 0:
         errorText = "<b>Error:</b> No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
+    neonID = searchResult[0]['Account ID']
+
+    if not searchResult[0]['WaiverDate'] or not searchResult[0]['FacilityTourDate'] or not searchResult[0]['Membership Start Date']:
+        errorText = "Account has not completed all access requirements. Use the Check Access button to find out what's missing."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    openPathUpdateSingle(neonID)
+
+    cardSection1TextParagraph1 = CardService.TextParagraph(
+        text = "Account Openpath has been updated."
+    )
+
+    cardSection1 = CardService.CardSection(
+        widgets = [cardSection1TextParagraph1]
+    )
+
+    card = CardService.CardBuilder(
+        section=cardSection1
+    )
+
+    responseCard = card.build()
+
+    return responseCard
 
 #@app.post('/settings')
 #@app.post('/submitSettings')
