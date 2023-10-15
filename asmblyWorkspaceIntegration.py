@@ -36,6 +36,44 @@ NEON_API_USER = static_keys.get("N_APIuser")
 G_USER = static_keys.get("G_user")
 G_PASS = static_keys.get("G_password")
 
+def create_secret(client: secretmanager.SecretManagerServiceClient, project_id: str, secret_id: str, payload: str) -> secretmanager.CreateSecretRequest:
+    """
+    Create a new secret with the given name, then create a secret version. A secret is a logical wrapper
+    around a collection of secret versions. Secret versions hold the actual
+    secret material.
+    """
+    # Build the resource name of the parent project.
+    parent = f"projects/{project_id}"
+
+    # Create the secret.
+    secret = client.create_secret(
+        request={
+            "parent": parent,
+            "secret_id": secret_id,
+            "secret": {"replication": {"automatic": {}}},
+        }
+    )
+
+    # Convert the string payload into a bytes. This step can be omitted if you
+    # pass in bytes instead of a str for the payload argument.
+    payload_bytes = payload.encode("UTF-8")
+
+    # Calculate payload checksum. Passing a checksum in add-version request
+    # is optional.
+    crc32c = google_crc32c.Checksum()
+    crc32c.update(payload_bytes)
+
+    # Add the secret version.
+    version = client.add_secret_version(
+        request={
+            "parent": secret.name, 
+            "payload": {
+                "data": payload_bytes,
+                "data_crc32c": int(crc32c.hexdigest(), 16),
+                }
+            }
+    )
+
 def verifyGoogleToken(token):
     try:
         # Specify the CLIENT_ID of the app that accesses the backend:
@@ -1011,18 +1049,88 @@ def settings(gevent: models.GEvent):
     responseCard = card.build()
 
     return responseCard
-#@app.post('/submitSettings')
 
+@app.post('/submitSettings')
+def submitSettings(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    with build('people', 'v1', credentials=creds) as peopleClient:
+        user = peopleClient.people().get(
+            resourceName='people/me',
+            personFields='names'
+        )
+        firstName = user.get('names')[0].get('givenName').lower()
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    neonAPIKey = gevent.commonEventObject.formInputs.get('neonAPIKey')
+    openPathAPIUser = gevent.commonEventObject.formInputs.get('openPathAPIUser')
+    openPathAPIKey = gevent.commonEventObject.formInputs.get('openPathAPIKey')
+
+    # Take submitted API info, create a json object with it, and submit to Google Secret Manager
+    # as a new secret, or secret version if the secret already exists. If the secret already exists,
+    # delete the old secret version.
+
+    newSecretVersion = {
+        "N_APIkey": neonAPIKey,
+        "O_APIuser": openPathAPIUser,
+        "O_APIkey": openPathAPIKey,
+    }
+
+    jsonSecretVersion = json.dumps(newSecretVersion)
+
+    client = secretmanager.SecretManagerServiceClient()
+
+    secret_id = firstName + userId
+
+    name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{secret_id}/versions/latest"
+
+    try:
+        secret = client.access_secret_version(request={"name": name})
+
+        # Verify payload checksum.
+        crc32c = google_crc32c.Checksum()
+        crc32c.update(secret.payload.data)
+        if secret.payload.data_crc32c != int(crc32c.hexdigest(), 16):
+            return createErrorResponseCard("Checksum failed.")
+        currentSecret = True
+    except:
+        currentSecret = False
+
+    if currentSecret:
+        path = client.secret_path(GCLOUD_PROJECT_ID, secret_id)
+
+        client.delete_secret(request={"name": path})
+        
+    create_secret(client, GCLOUD_PROJECT_ID, secret_id, jsonSecretVersion)
+
+    cardSection1TextParagraph1 = CardService.TextParagraph(
+        text = "API Keys Updated."
+    )
+
+    cardSection1 = CardService.CardSection(
+        widgets = [cardSection1TextParagraph1]
+    )
+
+    card = CardService.CardBuilder(
+        section=[cardSection1]
+    )
+
+    responseCard = card.build()
+
+    return responseCard
 #@app.post('/contextualHome')
 
 #@app.post('/home')
-responseCard = {
-    "renderActions": {
-        "action": {
-            "navigations": [
-                {
-                    "pushCard": []
-                }]
-        }
-    }
-}
+
