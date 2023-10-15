@@ -959,7 +959,58 @@ def updateOP(gevent: models.GEvent):
 
     return responseCard
 
-#@app.post('/settings')
+@app.post('/settings')
+def settings(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
+    cardSection1TextInput1 = CardService.TextInput(
+        field_name = "neonAPIKey",
+        title = "Neon API Key",
+        multiline = False
+    )
+
+    cardSection1TextInput2 = CardService.TextInput(
+        field_name = "openPathAPIUser",
+        title = "OpenPath API User",
+        multiline = False
+    )
+
+    cardSection1TextInput3 = CardService.TextInput(
+        field_name = "openPathAPIKey",
+        title = "Openpath API Key",
+        multiline = False
+    )
+
+    cardSection1ButtonList1Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('submitSettings')
+    )
+
+    cardSection1ButtonList1Button1 = CardService.TextButton(
+        text = "Submit",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList1Button1Action1
+    )
+
+    cardSection1ButtonList1 = CardService.ButtonSet(
+        button = [cardSection1ButtonList1Button1]
+    )
+
+    cardSection1 = CardService.CardSection(
+        widgets = [cardSection1TextInput1, cardSection1TextInput2, cardSection1TextInput3, cardSection1ButtonList1],
+        header = "API Keys"
+    )
+
+    card = CardService.CardBuilder(
+        section = [cardSection1]
+    )
+
+    responseCard = card.build()
+
+    return responseCard
 #@app.post('/submitSettings')
 
 #@app.post('/contextualHome')
