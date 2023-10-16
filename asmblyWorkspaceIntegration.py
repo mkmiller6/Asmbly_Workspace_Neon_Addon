@@ -1133,5 +1133,67 @@ def submitSettings(gevent: models.GEvent):
 
 #@app.post('/contextualHome')
 
-#@app.post('/home')
+@app.post('/home')
+def home(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
+    cardSection1TextInput1 = CardService.TextInput(
+        field_name = "checkAccess",
+        title = "Account ID or Email",
+        multiline = False
+    )
+
+    cardSection1ButtonList1Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('checkAccess')
+    )
+
+    cardSection1ButtonList1Button1 = CardService.TextButton(
+        text = "Check Access",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList1Button1Action1
+    )
+
+    cardSection1ButtonList1 = CardService.ButtonSet(
+        button = [cardSection1ButtonList1Button1]
+    )
+
+    cardSection1Divider1 = CardService.Divider()
+
+    cardSection1TextInput2 = CardService.TextInput(
+        field_name = "updateOpenpath",
+        title = "Account ID or Email",
+        multiline = False
+    )
+
+    cardSection1ButtonList2Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('updateOP')
+    )
+
+    cardSection1ButtonList2Button1 = CardService.TextButton(
+        text = "Update Openpath",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList2Button1Action1
+    )
+
+    cardSection1ButtonList2 = CardService.ButtonSet(
+        button = [cardSection1ButtonList2Button1]
+    )
+
+    cardSection1 = CardService.CardSection(
+        widgets = [cardSection1TextInput1, cardSection1ButtonList1, cardSection1Divider1, cardSection1TextInput2, cardSection1ButtonList2],
+        header = "Home"
+    )
+
+    card = CardService.CardBuilder(
+        section = [cardSection1],
+        name = "home"
+    )
+
+    responseCard = card.build()
+
+    return responseCard
 
