@@ -1131,7 +1131,89 @@ def submitSettings(gevent: models.GEvent):
 
     return responseCard
 
-#@app.post('/contextualHome')
+@app.post('/contextualHome')
+def contextualHome(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    cardSection1ButtonList1Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('getNeonId')
+    )
+
+    cardSection1ButtonList1Button1 = CardService.TextButton(
+        text = "Get Neon ID",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList1Button1Action1
+    )
+
+    cardSection1ButtonList1 = CardService.ButtonSet(
+        button = [cardSection1ButtonList1Button1]
+    )
+
+    cardSection1Divider1 = CardService.Divider()
+
+    cardSection1ButtonList2Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('checkAccess')
+    )
+
+    cardSection1ButtonList2Button1 = CardService.TextButton(
+        text = "Check Access",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList2Button1Action1
+    )
+
+    cardSection1ButtonList2 = CardService.ButtonSet(
+        button = [cardSection1ButtonList2Button1]
+    )
+
+    cardSection1Divider2 = CardService.Divider()
+
+    cardSection1ButtonList3Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('updateOP')
+    )
+
+    cardSection1ButtonList3Button1 = CardService.TextButton(
+        text = "Update Openpath",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList3Button1Action1
+    )
+
+    cardSection1ButtonList3 = CardService.ButtonSet(
+        button = [cardSection1ButtonList3Button1]
+    )
+
+    cardSection1Divider3 = CardService.Divider()
+
+    cardSection1ButtonList4Button1Action1 = CardService.Action(
+        function_name = app.url_path_for('classHomePage')
+    )
+
+    cardSection1ButtonList4Button1 = CardService.TextButton(  
+        text = "Classes",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList4Button1Action1
+    )
+
+    cardSection1ButtonList4 = CardService.ButtonSet(
+        button = [cardSection1ButtonList4Button1]
+    )
+
+    cardSection1 = CardService.CardSection(
+        widgets = [cardSection1ButtonList1, cardSection1Divider1, cardSection1ButtonList2, cardSection1Divider2, cardSection1ButtonList3, cardSection1Divider3, cardSection1ButtonList4],
+        header = "Home"
+    )
+
+    card = CardService.CardBuilder(
+        section = [cardSection1],
+        name = "contextualHome"
+    )
+
+    responseCard = card.build()
+
+    return responseCard
 
 @app.post('/home')
 def home(gevent: models.GEvent):
