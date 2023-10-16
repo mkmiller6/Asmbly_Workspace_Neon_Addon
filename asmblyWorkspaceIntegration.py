@@ -26,7 +26,31 @@ import google_crc32c
 
 app = FastAPI(title='Neon Workspace Integration')
 
-static_keys = json.loads(os.environ.get('static_keys'))
+dev = True
+
+if dev:
+    GCLOUD_PROJECT_ID = "gmail-neon-op-integration"
+
+    client = secretmanager.SecretManagerServiceClient()
+
+    secret_id = "static_keys"
+
+    name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{secret_id}/versions/latest"
+
+    secret = client.access_secret_version(request={"name": name})
+
+    # Verify payload checksum.
+    crc32c = google_crc32c.Checksum()
+    crc32c.update(secret.payload.data)
+    if secret.payload.data_crc32c != int(crc32c.hexdigest(), 16):
+        raise Exception("Checksum failed.")
+    
+    payload = secret.payload.data.decode("UTF-8")
+
+    static_keys = json.loads(payload)
+
+else:
+    static_keys = json.loads(os.environ.get('static_keys'))
 
 GCLOUD_PROJECT_ID = static_keys.get("project_id")
 CLIENT_ID = static_keys.get("client_id")
