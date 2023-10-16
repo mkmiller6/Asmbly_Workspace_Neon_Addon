@@ -900,16 +900,17 @@ def checkAccess(gevent: models.GEvent):
         acctEmail = getFromGmailEmail(gevent, creds)
         searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
 
-    if searchResult is not None and len(searchResult) > 1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
-        responseCard = createErrorResponseCard(errorText)
-        return responseCard
-    elif searchResult is not None and len(searchResult) == 0:
-        errorText = "<b>Error:</b> No Neon accounts found."
-        responseCard = createErrorResponseCard(errorText)
-        return responseCard
-    
     if searchResult is not None:
+
+        if len(searchResult) > 1:
+            errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
+        elif len(searchResult) == 0:
+            errorText = "<b>Error:</b> No Neon accounts found."
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
+    
         neonID = searchResult[0]['Account ID']
         accountName = searchResult[0]["First Name"] + \
             ' ' + searchResult[0]["Last Name"]
