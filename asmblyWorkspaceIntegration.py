@@ -876,35 +876,52 @@ def checkAccess(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
-    
-    acctEmail = getFromGmailEmail(gevent, creds)
 
-    searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+    waiverBoolean = False
+    orientBoolean = False
+    memBoolean = False
+    searchResult = None
 
-    if len(searchResult) > 1:
+    if input := gevent.commonEventObject.formInputs.get('checkAccess'):
+        if input.isdigit():
+            neonID = int(input)
+            acct = neon.getAccountIndividual(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+            if acct.get('WaiverDate'):
+                waiverBoolean = True
+            if acct.get('FacilityTourDate'):
+                orientBoolean = True
+            if acct.get('Membership Start Date'):
+                memBoolean = True
+            accountName = acct["First Name"] + ' ' + acct["Last Name"]
+        else:
+            searchResult = getNeonAcctByEmail(input, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+
+    else:
+        acctEmail = getFromGmailEmail(gevent, creds)
+        searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+
+    if searchResult is not None and len(searchResult) > 1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-    elif len(searchResult) == 0:
+    elif searchResult is not None and len(searchResult) == 0:
         errorText = "<b>Error:</b> No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
-    neonID = searchResult[0]['Account ID']
-    accountName = searchResult[0]["First Name"] + \
-        ' ' + searchResult[0]["Last Name"]
-    
-    waiverBoolean = False
-    if searchResult[0]['WaiverDate']:
-        waiverBoolean = True
+    if searchResult is not None:
+        neonID = searchResult[0]['Account ID']
+        accountName = searchResult[0]["First Name"] + \
+            ' ' + searchResult[0]["Last Name"]
+        
+        if searchResult[0]['WaiverDate']:
+            waiverBoolean = True
 
-    orientBoolean = False
-    if searchResult[0]['FacilityTourDate']:
-        orientBoolean = True
+        if searchResult[0]['FacilityTourDate']:
+            orientBoolean = True
 
-    memBoolean = False
-    if searchResult[0]['Membership Start Date']:
-        memBoolean = True
+        if searchResult[0]['Membership Start Date']:
+            memBoolean = True
 
     cardSection1SelectionInput1 = CardService.SelectionInput(
         field_name = "currentAccessRequirements",
