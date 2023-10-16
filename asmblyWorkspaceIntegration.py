@@ -958,10 +958,37 @@ def updateOP(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
-    
-    acctEmail = getFromGmailEmail(gevent, creds)
 
-    searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+    cardSection1TextParagraph1 = CardService.TextParagraph(
+        text = "Account Openpath has been updated."
+    )
+
+    cardSection1 = CardService.CardSection(
+        widgets = [cardSection1TextParagraph1]
+    )
+
+    card = CardService.CardBuilder(
+        section=[cardSection1]
+    )
+
+    responseCard = card.build()
+
+    if input := gevent.commonEventObject.formInputs.get('updateOpenpath'):
+        if input.isdigit():
+            acct = neon.getAccountIndividual(int(input), N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+            if not acct.get('WaiverDate') or not acct.get('FacilityTourDate') or not acct.get('Membership Start Date'):
+                errorText = "Account has not completed all access requirements. Use the Check Access button to find out what's missing."
+                responseCard = createErrorResponseCard(errorText)
+                return responseCard
+            openPathUpdateSingle(int(input))
+            return responseCard
+
+        else:
+            searchResult = getNeonAcctByEmail(input, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+
+    else:
+        acctEmail = getFromGmailEmail(gevent, creds)
+        searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
 
     if len(searchResult) > 1:
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
@@ -978,22 +1005,8 @@ def updateOP(gevent: models.GEvent):
         errorText = "Account has not completed all access requirements. Use the Check Access button to find out what's missing."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-    
+
     openPathUpdateSingle(neonID)
-
-    cardSection1TextParagraph1 = CardService.TextParagraph(
-        text = "Account Openpath has been updated."
-    )
-
-    cardSection1 = CardService.CardSection(
-        widgets = [cardSection1TextParagraph1]
-    )
-
-    card = CardService.CardBuilder(
-        section=[cardSection1]
-    )
-
-    responseCard = card.build()
 
     return responseCard
 
