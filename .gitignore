@@ -9,3 +9,5 @@ config.py
 secret_values.json
 temp_json.json
 AppsScriptCards
+deploymentResource.json
+.DS_Store
