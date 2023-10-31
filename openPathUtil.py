@@ -225,7 +225,7 @@ def updateGroups(neonAccount, O_APIkey, O_APIuser, G_user, G_pass, openPathGroup
     if openPathGroups is None:
         openPathGroups = getGroupsById(neonAccount.get("OpenPathID"), O_APIkey, O_APIuser)
 
-    neonOpGroups = getOpGroups(neonAccount, O_APIkey, O_APIuser)
+    neonOpGroups = getOpGroups(neonAccount)
 
     opGroupArray = []
     for group in openPathGroups:

@@ -74,7 +74,10 @@ NEON_API_USER = static_keys.get("N_APIuser")
 G_USER = static_keys.get("G_user")
 G_PASS = static_keys.get("G_password")
 
-def create_secret(client: secretmanager.SecretManagerServiceClient, project_id: str, secret_id: str, payload: str) -> secretmanager.CreateSecretRequest:
+def create_secret(client: secretmanager.SecretManagerServiceClient, 
+                  project_id: str, 
+                  secret_id: str, 
+                  payload: str) -> secretmanager.CreateSecretRequest:
     """
     Create a new secret with the given name, then create a secret version. A secret is a logical wrapper
     around a collection of secret versions. Secret versions hold the actual
@@ -287,7 +290,8 @@ async def getNeonId(gevent: models.GEvent):
 
         return {"renderActions": responseCard}
     elif len(searchResult) > 1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
+        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+            Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     else:
@@ -345,7 +349,11 @@ def classHomePage(gevent: models.GEvent):
 
     cardSection1 = CardService.CardSection(
         header="Add Registration",
-        widget=[cardSection1TextInput1, cardSection1DatePicker1, cardSection1DatePicker2, cardSection1ButtonList1],
+        widget=[cardSection1TextInput1, 
+                cardSection1DatePicker1, 
+                cardSection1DatePicker2, 
+                cardSection1ButtonList1
+                ],
     )
 
     cardSection2DecoratedText1Icon1 = CardService.IconImage(
@@ -406,10 +414,12 @@ def classHomePage(gevent: models.GEvent):
 
     #print(responseCard)
 
-    responseCard["action"]["navigations"][0]["pushCard"]["sections"][1]["widgets"][0]["decoratedText"]["startIcon"] = {"knownIcon": "TICKET"}
+    responseCard["action"]["navigations"][0]["pushCard"]["sections"][1]["widgets"][0]["decoratedText"]["startIcon"] = \
+        {"knownIcon": "TICKET"}
     responseCard["action"]["navigations"][0]["pushCard"]["sections"][1]["widgets"][0]["horizontalAlignment"] = "CENTER"
     
-    responseCard["action"]["navigations"][0]["pushCard"]["sections"][2]["widgets"][0]["decoratedText"]["startIcon"] = {"knownIcon": "DOLLAR"}
+    responseCard["action"]["navigations"][0]["pushCard"]["sections"][2]["widgets"][0]["decoratedText"]["startIcon"] = \
+        {"knownIcon": "DOLLAR"}
     responseCard["action"]["navigations"][0]["pushCard"]["sections"][2]["widgets"][0]["horizontalAlignment"] = "CENTER"
     
     return {"renderActions":responseCard}
@@ -443,12 +453,17 @@ def searchClasses(gevent: models.GEvent):
         errorText = "<b>Error:</b> Event name is required."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-    if gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"] and gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]:
+    if gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"] and \
+        gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]:
         #This will give UTC time - need to convert to CST
-        eventStartDateUTC = datetime.datetime.utcfromtimestamp(gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"]/1000)
+        eventStartDateUTC = datetime.datetime.utcfromtimestamp(
+            gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"]/1000
+            )
         eventStartDate = eventStartDateUTC.date().isoformat()
 
-        eventEndDateUTC = datetime.datetime.utcfromtimestamp(gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]/1000)
+        eventEndDateUTC = datetime.datetime.utcfromtimestamp(
+            gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]/1000
+            )
         eventEndDate = eventEndDateUTC.date().isoformat()
 
         searchFields = [
@@ -469,7 +484,9 @@ def searchClasses(gevent: models.GEvent):
         }]
     
     elif gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"]:
-        eventStartDateUTC = datetime.datetime.utcfromtimestamp(gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"]/1000)
+        eventStartDateUTC = datetime.datetime.utcfromtimestamp(
+            gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"]/1000
+            )
         eventStartDate = eventStartDateUTC.date().isoformat()
 
         searchFields = [
@@ -486,7 +503,9 @@ def searchClasses(gevent: models.GEvent):
         ]
 
     elif gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]:
-        eventEndDateUTC = datetime.datetime.utcfromtimestamp(gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]/1000)
+        eventEndDateUTC = datetime.datetime.utcfromtimestamp(
+            gevent.commonEventObject.formInputs["endDate"]["dateInput"]["msSinceEpoch"]/1000
+            )
         eventEndDate = eventEndDateUTC.date().isoformat()
         eventStartDate = datetime.date.today().isoformat()
 
@@ -580,7 +599,11 @@ def searchClasses(gevent: models.GEvent):
                                     "text": text,
                                     "on_click": {
                                         "action": {
-                                            "function": BASE_URL + app.url_path_for('classReg')
+                                            "function": BASE_URL + app.url_path_for('classReg'),
+                                            "parameters": [{
+                                                "key": "eventID",
+                                                "value": result["Event ID"]
+                                        }]
                                         }
                                     },
                                     "disabled": disabled
@@ -588,7 +611,8 @@ def searchClasses(gevent: models.GEvent):
                             }
                         }
 
-            responseCard["renderActions"]["action"]["navigations"][0]["pushCard"]["sections"][0]["widgets"].append(newWidget)
+            responseCard["renderActions"]["action"]["navigations"][0] \
+                ["pushCard"]["sections"][0]["widgets"].append(newWidget)
         return responseCard
     else:
         errorText = "No classes found. Check your spelling or try a different date."
@@ -596,8 +620,8 @@ def searchClasses(gevent: models.GEvent):
         return responseCard
     
 
-#Registers the active gmail user for the selected class with a $0 price. Pulls the eventID from the bottom label of the
-#previous card
+# Registers the active gmail user for the selected class with a $0 price. Pulls the eventID from the bottom label of the
+# previous card
 @app.post('/classReg')
 async def classReg(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
@@ -617,18 +641,19 @@ async def classReg(gevent: models.GEvent):
 
     apiKeys = getUserKeys(creds, userId)
     
-    acctEmail = await getFromGmailEmail(gevent, creds)
+    acctEmail = getFromGmailEmail(gevent, creds)
 
     searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
 
-    eventID = gevent.commonEventObject.formInputs.get('decorated_txt_top_label')
+    eventID = gevent.commonEventObject.parameters.get('eventID')
 
     if len(searchResult) == 0:
         errorText = "<b>Error:</b> No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     elif len(searchResult) > 1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
+        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+            Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
@@ -637,7 +662,13 @@ async def classReg(gevent: models.GEvent):
     accountID = searchResult[0]["Account ID"]
 
     try:
-        neon.postEventRegistration(accountID, eventID, accountFirstName, accountLastName, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+        neon.postEventRegistration(accountID, 
+                                   eventID, 
+                                   accountFirstName, 
+                                   accountLastName, 
+                                   N_APIkey=apiKeys['N_APIkey'], 
+                                   N_APIuser=NEON_API_USER
+                                   )
     except:
         errorText = "<b>Error:</b> Registration failed. Use Neon to register individual."
         responseCard = createErrorResponseCard(errorText)
@@ -684,7 +715,8 @@ def getAcctRegClassCancel(gevent: models.GEvent):
         try:
             classDict = neon.getAccountEventRegistrations(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
         except:
-            errorText = "<b>Error:</b> Unable to find classes. Account may not have registered for any classes. Alternaively, check your authentication or use the Neon website."
+            errorText = "<b>Error:</b> Unable to find classes. Account may not have registered for any classes. \
+                Alternaively, check your authentication or use the Neon website."
             responseCard = createErrorResponseCard(errorText)
             return responseCard
         today = datetime.date.today()
@@ -697,7 +729,11 @@ def getAcctRegClassCancel(gevent: models.GEvent):
             eventDate = datetime.datetime.fromisoformat(eventInfo["eventDates"]["startDate"]).date()
             eventName = eventInfo["name"]
             if eventDate - today >= datetime.timedelta(days=0) and regStatus == "SUCCEEDED":
-                upcomingClasses.append({"regID":registrationID, "eventID":eventID, "eventName":eventName, "startDate": eventInfo["eventDates"]["startDate"]})
+                upcomingClasses.append({"regID":registrationID, 
+                                        "eventID":eventID, 
+                                        "eventName":eventName, 
+                                        "startDate": eventInfo["eventDates"]["startDate"]
+                                        })
         
         if not len(upcomingClasses):
             errorText = "No upcoming classes found."
@@ -758,7 +794,8 @@ def getAcctRegClassCancel(gevent: models.GEvent):
         return {"renderActions": responseCard} 
                 
     elif len(searchResult) >1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
+        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+            Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     else:
@@ -869,7 +906,12 @@ def classCancelConfirm(gevent: models.GEvent):
     apiKeys = getUserKeys(creds, userId)
 
     try:
-        cancelResponse = neon.cancelClass(regId, eventId = eventID, neonId = neonId, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+        cancelResponse = neon.cancelClass(regId, 
+                                          eventId = eventID, 
+                                          neonId = neonId, 
+                                          N_APIkey=apiKeys['N_APIkey'], 
+                                          N_APIuser=NEON_API_USER
+                                          )
     except:
         errorText = "<b>Error:</b> Cancelation failed. Check your authentication or use the Neon website."
         responseCard = createErrorResponseCard(errorText)
@@ -917,7 +959,8 @@ def classCancelConfirm(gevent: models.GEvent):
  
         return {"renderActions": responseCard}
     else:
-        errorText = f"<b>Error:</b> Cancelation failed with status code {cancelResponse.status_code}. Use Neon to cancel registration."
+        errorText = f"<b>Error:</b> Cancelation failed with status code {cancelResponse.status_code}. \
+            Use Neon to cancel registration."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
@@ -983,7 +1026,8 @@ def checkAccess(gevent: models.GEvent):
     memBoolean = False
     searchResult = None
 
-    if isinstance(gevent.commonEventObject.formInputs.get('checkAccess'), dict) and gevent.commonEventObject.formInputs.get('checkAccess').get('stringInputs').get('value')[0]:
+    if isinstance(gevent.commonEventObject.formInputs.get('checkAccess'), dict) and \
+        gevent.commonEventObject.formInputs.get('checkAccess').get('stringInputs').get('value')[0]:
         input = gevent.commonEventObject.formInputs.get('checkAccess').get('stringInputs').get('value')[0]
         if input.isdigit():
             neonID = int(input)
@@ -1006,7 +1050,8 @@ def checkAccess(gevent: models.GEvent):
     if searchResult is not None:
 
         if len(searchResult) > 1:
-            errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
+            errorText = "<b>Error:</b> Multiple Neon accounts found. \
+                Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
             responseCard = createErrorResponseCard(errorText)
             return responseCard
         elif len(searchResult) == 0:
@@ -1049,7 +1094,10 @@ def checkAccess(gevent: models.GEvent):
         field_name = "currentAccessRequirements",
         title = "Current Access Requirements",
         type = CardService.SelectionInputType.CHECK_BOX,
-        item = [cardSection1SelectionInput1Selection1, cardSection1SelectionInput1Selection2, cardSection1SelectionInput1Selection3]
+        item = [cardSection1SelectionInput1Selection1, 
+                cardSection1SelectionInput1Selection2, 
+                cardSection1SelectionInput1Selection3
+                ]
     )
 
     cardSection1 = CardService.CardSection(
@@ -1106,15 +1154,24 @@ def updateOP(gevent: models.GEvent):
 
     responseCard = navAction.build()
 
-    if isinstance(gevent.commonEventObject.formInputs.get('updateOpenpath'), dict) and gevent.commonEventObject.formInputs.get('updateOpenpath').get('stringInputs').get('value')[0]:
+    if isinstance(gevent.commonEventObject.formInputs.get('updateOpenpath'), dict) and \
+        gevent.commonEventObject.formInputs.get('updateOpenpath').get('stringInputs').get('value')[0]:
         input = gevent.commonEventObject.formInputs.get('updateOpenpath').get('stringInputs').get('value')[0]
         if input.isdigit():
             acct = neonUtil.getMemberById(int(input), N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
             if not acct.get('WaiverDate') or not acct.get('FacilityTourDate') or not acct.get('Membership Start Date'):
-                errorText = "Account has not completed all access requirements. Use the Check Access button to find out what's missing."
+                errorText = "Account has not completed all access requirements. \
+                    Use the Check Access button to find out what's missing."
                 responseCard = createErrorResponseCard(errorText)
                 return responseCard
-            openPathUpdateSingle(int(input), N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER, O_APIkey=apiKeys['O_APIkey'], O_APIuser=apiKeys['O_APIuser'], G_user=G_USER, G_pass=G_PASS)
+            openPathUpdateSingle(int(input), 
+                                 N_APIkey=apiKeys['N_APIkey'], 
+                                 N_APIuser=NEON_API_USER, 
+                                 O_APIkey=apiKeys['O_APIkey'], 
+                                 O_APIuser=apiKeys['O_APIuser'], 
+                                 G_user=G_USER, 
+                                 G_pass=G_PASS
+                                 )
             return responseCard
 
         else:
@@ -1125,7 +1182,8 @@ def updateOP(gevent: models.GEvent):
         searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
 
     if len(searchResult) > 1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
+        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+            Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     elif len(searchResult) == 0:
@@ -1135,12 +1193,21 @@ def updateOP(gevent: models.GEvent):
 
     neonID = searchResult[0]['Account ID']
 
-    if not searchResult[0]['WaiverDate'] or not searchResult[0]['FacilityTourDate'] or not searchResult[0]['Membership Start Date']:
-        errorText = "Account has not completed all access requirements. Use the Check Access button to find out what's missing."
+    if not searchResult[0]['WaiverDate'] or not searchResult[0]['FacilityTourDate'] or not \
+        searchResult[0]['Membership Start Date']:
+        errorText = "Account has not completed all access requirements. \
+            Use the Check Access button to find out what's missing."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
-    openPathUpdateSingle(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER, O_APIkey=apiKeys['O_APIkey'], O_APIuser=apiKeys['O_APIuser'], G_user=G_USER, G_pass=G_PASS)
+    openPathUpdateSingle(neonID, 
+                         N_APIkey=apiKeys['N_APIkey'], 
+                         N_APIuser=NEON_API_USER, 
+                         O_APIkey=apiKeys['O_APIkey'], 
+                         O_APIuser=apiKeys['O_APIuser'], 
+                         G_user=G_USER, 
+                         G_pass=G_PASS
+                         )
 
     return responseCard
 
@@ -1367,7 +1434,11 @@ def settings(gevent: models.GEvent):
     )
 
     cardSection1 = CardService.CardSection(
-        widget = [cardSection1TextInput1, cardSection1TextInput2, cardSection1TextInput3, cardSection1ButtonList1],
+        widget = [cardSection1TextInput1, 
+                  cardSection1TextInput2, 
+                  cardSection1TextInput3, 
+                  cardSection1ButtonList1
+                  ],
         header = "API Keys"
     )
 
@@ -1537,7 +1608,14 @@ def contextualHome(gevent: models.GEvent):
     )
 
     cardSection1 = CardService.CardSection(
-        widget = [cardSection1ButtonList1, cardSection1Divider1, cardSection1ButtonList2, cardSection1Divider2, cardSection1ButtonList3, cardSection1Divider3, cardSection1ButtonList4],
+        widget = [cardSection1ButtonList1, 
+                  cardSection1Divider1, 
+                  cardSection1ButtonList2, 
+                  cardSection1Divider2, 
+                  cardSection1ButtonList3, 
+                  cardSection1Divider3, 
+                  cardSection1ButtonList4
+                  ],
         header = "Home"
     )
 
@@ -1623,7 +1701,15 @@ def home(gevent: models.GEvent):
     )
 
     cardSection1 = CardService.CardSection(
-        widget = [cardSection1TextInput1, cardSection1ButtonList1, cardSection1Divider1, cardSection1TextInput2, cardSection1ButtonList2, cardSection1Divider2, cardSection1TextInput3, cardSection1ButtonList3],
+        widget = [cardSection1TextInput1, 
+                  cardSection1ButtonList1, 
+                  cardSection1Divider1, 
+                  cardSection1TextInput2, 
+                  cardSection1ButtonList2, 
+                  cardSection1Divider2, 
+                  cardSection1TextInput3, 
+                  cardSection1ButtonList3
+                  ],
         header = "Home"
     )
 
