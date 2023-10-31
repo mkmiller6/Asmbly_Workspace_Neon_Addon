@@ -403,6 +403,22 @@ def cancelClass(registrationId, eventId: str, neonId: str, N_APIkey, N_APIuser):
 
     return responseStatus
 
+def refundClass(eventId: str, neonId: str, N_APIkey, N_APIuser):
+    httpVerb = 'POST'
+    resourcePath = f'/payments/{paymentId}/refund'
+    queryParams = ''
+    reg = getAccountSingleEventRegistration(neonId, eventId, N_APIkey, N_APIuser).get('eventRegistrations')[0]
+    paymentId = reg.get("payments")[0].get("id")
+    data = ""
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
+    url = N_baseURL + resourcePath + queryParams
+    responseStatus = apiCall(httpVerb, url, data, N_headers)
+
+    return responseStatus
+
 def getEventTopics(N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = f'/properties/eventTopics'

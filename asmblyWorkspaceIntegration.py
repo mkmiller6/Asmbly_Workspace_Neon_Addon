@@ -355,24 +355,13 @@ def classHomePage(gevent: models.GEvent):
                 cardSection1ButtonList1
                 ],
     )
-
-    cardSection2DecoratedText1Icon1 = CardService.IconImage(
-        icon=CardService.Icon.TICKET,
-    )
         
     cardSection2DecoratedText1Button1Action1 = CardService.Action(
-        function_name = BASE_URL + app.url_path_for('getAcctRegClassCancel'),
+        function_name = BASE_URL + app.url_path_for('getAcctRegClassRefund'),
     )
 
-    #cardSection2DecoratedText1Button1 = CardService.TextButton(
-    #    text="Cancel",
-    #    text_button_style=CardService.TextButtonStyle.TEXT,
-    #    on_click_action=cardSection2DecoratedText1Button1Action1
-    #)
-
     cardSection2DecoratedText1 = CardService.DecoratedText(
-        text="Cancel a Registration",
-        #start_icon=cardSection2DecoratedText1Icon1,
+        text="Cancel and refund a registration",
         on_click_action=cardSection2DecoratedText1Button1Action1,
     )
 
@@ -380,47 +369,17 @@ def classHomePage(gevent: models.GEvent):
         widget=[cardSection2DecoratedText1]
     )
 
-    cardSection3DecoratedText1Icon1 = CardService.IconImage(
-        icon=CardService.Icon.DOLLAR,
-    )
-
-    cardSection3DecoratedText1Button1Action1 = CardService.Action(
-        function_name = BASE_URL + app.url_path_for('getAcctRegClassRefund'),
-    )
-
-    #cardSection3DecoratedText1Button1 = CardService.TextButton(
-    #    text="Refund",
-    #    text_button_style=CardService.TextButtonStyle.TEXT,
-    #    on_click_action=cardSection3DecoratedText1Button1Action1
-    #)
-
-    cardSection3DecoratedText1 = CardService.DecoratedText(
-        text="Refund a Registration",
-        #start_icon=cardSection3DecoratedText1Icon1,
-        on_click_action=cardSection3DecoratedText1Button1Action1,
-    )
-
-    cardSection3 = CardService.CardSection(
-        widget=[cardSection3DecoratedText1]
-    )
-
     card = CardService.CardBuilder(
         header=cardHeader1,
-        section=[cardSection1, cardSection2, cardSection3],
+        section=[cardSection1, cardSection2],
         name = "classHomePage"
     )
 
     responseCard = card.build()
 
-    #print(responseCard)
-
     responseCard["action"]["navigations"][0]["pushCard"]["sections"][1]["widgets"][0]["decoratedText"]["startIcon"] = \
-        {"knownIcon": "TICKET"}
-    responseCard["action"]["navigations"][0]["pushCard"]["sections"][1]["widgets"][0]["horizontalAlignment"] = "CENTER"
-    
-    responseCard["action"]["navigations"][0]["pushCard"]["sections"][2]["widgets"][0]["decoratedText"]["startIcon"] = \
         {"knownIcon": "DOLLAR"}
-    responseCard["action"]["navigations"][0]["pushCard"]["sections"][2]["widgets"][0]["horizontalAlignment"] = "CENTER"
+    responseCard["action"]["navigations"][0]["pushCard"]["sections"][1]["widgets"][0]["horizontalAlignment"] = "CENTER"
     
     return {"renderActions":responseCard}
 
@@ -811,11 +770,118 @@ def getAcctRegClassRefund(gevent: models.GEvent):
         errorText = "<b>Error:</b> Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-    
-    return
 
-#Cancels user's registration in class. RegistrationID for given registration is pulled from top label of widget on 
-# /getAcctRegClassCancel card
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    apiKeys = getUserKeys(creds, userId)
+    
+    acctEmail = getFromGmailEmail(gevent, creds)
+
+    searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+
+    if len(searchResult) == 1:
+        neonID = searchResult[0]['Account ID']
+        try:
+            classDict = neon.getAccountEventRegistrations(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+        except:
+            errorText = "<b>Error:</b> Unable to find classes. Account may not have registered for any classes. \
+                Alternaively, check your authentication or use the Neon website."
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
+        today = datetime.date.today()
+        upcomingClasses = []
+        for event in classDict["eventRegistrations"]:
+            registrationID = event["id"]
+            eventID = event["eventId"]
+            regStatus = event["tickets"][0]["attendees"][0]["registrationStatus"]
+            eventInfo = neon.getEvent(eventID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+            eventDate = datetime.datetime.fromisoformat(eventInfo["eventDates"]["startDate"]).date()
+            eventName = eventInfo["name"]
+            if eventDate - today >= datetime.timedelta(days=0) and regStatus == "SUCCEEDED":
+                upcomingClasses.append({"regID":registrationID, 
+                                        "eventID":eventID, 
+                                        "eventName":eventName, 
+                                        "startDate": eventInfo["eventDates"]["startDate"]
+                                        })
+        
+        if not len(upcomingClasses):
+            errorText = "No upcoming classes found."
+            responseCard = createErrorResponseCard(errorText)
+            return responseCard
+        
+        upcomingClasses.sort(key=lambda x: x["startDate"])
+        
+        temp_widgets = []
+
+        cardHeader1 = CardService.CardHeader(
+            title = "Cancel and Refund Classes"
+        )
+
+        iter = enumerate(upcomingClasses)
+    
+        for _, upcomingClass in iter:
+            cardSection1DecoratedText1Button1Action1 = CardService.Action(
+                function_name = BASE_URL + app.url_path_for('classRefund'),
+                parameters = {
+                    "regID": upcomingClass["regID"],
+                    "eventID": upcomingClass["eventID"],
+                    "startDate": upcomingClass["startDate"],
+                    "eventName": upcomingClass["eventName"],
+                    "neonID": neonID
+                }
+            )
+            cardSection1DecoratedText1Button1 = CardService.TextButton(
+                text = "Refund",
+                text_button_style=CardService.TextButtonStyle.TEXT,
+                on_click_action = cardSection1DecoratedText1Button1Action1
+            )
+            cardSection1DecoratedText1 = CardService.DecoratedText(
+                text = upcomingClass["eventName"],
+                top_label = upcomingClass["regID"],
+                bottom_label = upcomingClass["startDate"],
+                wrap_text = True,
+                button = cardSection1DecoratedText1Button1
+            )
+
+            temp_widgets.append(cardSection1DecoratedText1)
+
+            if iter.__next__:
+                cardSection1Divider1 = CardService.Divider()
+                temp_widgets.append(cardSection1Divider1)
+
+        cardSection1 = CardService.CardSection(
+            header = "Upcoming Classes",
+            widget = temp_widgets,
+        )            
+
+        card = CardService.CardBuilder(
+            header = cardHeader1,
+            section = [cardSection1],
+            name = "refundClassListCard"
+        )
+
+        responseCard = card.build()
+
+        return {"renderActions": responseCard} 
+                
+    elif len(searchResult) >1:
+        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+            Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    else:
+        errorText = "<b>Error:</b> No Neon accounts found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
+#Cancels user's registration in class. 
 @app.post('/classCancel')
 def classCancel(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
@@ -831,8 +897,6 @@ def classCancel(gevent: models.GEvent):
     neonId = gevent.commonEventObject.parameters.get('neonID')
 
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
-
-    #os.environ[f"current_class_id_{userId}"] = regId
 
     cardSection1TextParagraph1 = CardService.TextParagraph(
         text = f"Are you sure you want to cancel the registration for {className} on {classDate}?"
@@ -1000,7 +1064,149 @@ def popToHome():
 
     return response.build()
 
-#@app.post('/classRefund')
+@app.post('/classRefund')
+def classRefund(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    regId = gevent.commonEventObject.parameters.get('regID')
+    eventID = gevent.commonEventObject.parameters.get('eventID')
+    className = gevent.commonEventObject.parameters.get('eventName')
+    classDate = gevent.commonEventObject.parameters.get('startDate')
+    neonId = gevent.commonEventObject.parameters.get('neonID')
+
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    cardSection1TextParagraph1 = CardService.TextParagraph(
+        text = f"Are you sure you want to cancel the registration for {className} on {classDate} and issue a refund?"
+    )
+
+    cardSection1ButtonList1Button1Action1 = CardService.Action(
+        function_name = BASE_URL + app.url_path_for('classRefundConfirm'),
+        parameters = {
+            "regID": regId,
+            "eventID": eventID,
+            "neonID": neonId
+        }
+    )
+
+    cardSection1ButtonList1Button1 = CardService.TextButton(
+        text = "Yes",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList1Button1Action1
+    )
+
+    cardSection1ButtonList1Button2Action1 = CardService.Action(
+        function_name = BASE_URL + app.url_path_for('popCard'),
+    )
+    
+    cardSection1ButtonList1Button2 = CardService.TextButton(
+        text = "No",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList1Button2Action1
+    )
+    
+    cardSection1ButtonList1 = CardService.ButtonSet(
+        button = [cardSection1ButtonList1Button1, cardSection1ButtonList1Button2]
+    )
+
+    cardSection1 = CardService.CardSection(
+        header = "Confirmation",
+        widget = [cardSection1TextParagraph1, cardSection1ButtonList1]
+    )
+
+    card = CardService.CardBuilder(
+        section=[cardSection1],
+        name = "classRefundCard"
+    )
+
+    responseCard = card.build()
+
+    return {"renderActions": responseCard}
+
+@app.post('/classRefundConfirm')
+def classRefundConfirm(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+    
+    regId = gevent.commonEventObject.parameters.get('regID')
+    eventID = gevent.commonEventObject.parameters.get('eventID')
+    neonId = gevent.commonEventObject.parameters.get('neonID')
+
+    apiKeys = getUserKeys(creds, userId)
+
+    try:
+        cancelResponse = neon.refundClass(eventId = eventID, 
+                                          neonId = neonId, 
+                                          N_APIkey=apiKeys['N_APIkey'], 
+                                          N_APIuser=NEON_API_USER
+                                          )
+    except:
+        errorText = "<b>Error:</b> Cancellation failed. Check your authentication or use the Neon website."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    if cancelResponse.status_code in range(200, 300):
+        cardSection1TextParagraph1 = CardService.TextParagraph(
+            text = f"Successfully cancelled and refunded registration."
+        )
+
+        cardSection1ButtonList1Button1Action1 = CardService.Action(
+            function_name = BASE_URL + app.url_path_for('popToClassPage'),
+        )
+
+        cardSection1ButtonList1Button1 = CardService.TextButton(
+            text = "Return to Class Page",
+            text_button_style=CardService.TextButtonStyle.TEXT,
+            on_click_action = cardSection1ButtonList1Button1Action1
+        )
+
+        cardSection1ButtonList1Button2Action1 = CardService.Action(
+            function_name = BASE_URL + app.url_path_for('popToHome'),
+        )
+        
+        cardSection1ButtonList1Button2 = CardService.TextButton(
+            text = "Return to Home Page",
+            text_button_style=CardService.TextButtonStyle.TEXT,
+            on_click_action = cardSection1ButtonList1Button2Action1
+        )
+        
+        cardSection1ButtonList1 = CardService.ButtonSet(
+            button = [cardSection1ButtonList1Button1, cardSection1ButtonList1Button2]
+        )
+
+        cardSection1 = CardService.CardSection(
+            header = "Confirmed",
+            widget = [cardSection1TextParagraph1, cardSection1ButtonList1]
+        )
+
+        card = CardService.CardBuilder(
+            section=[cardSection1],
+            name = "classRefundConfirmationCard"
+        )
+
+        responseCard = card.build()
+ 
+        return {"renderActions": responseCard}
+    else:
+        errorText = f"<b>Error:</b> Cancellation failed with status code {cancelResponse.status_code}. \
+            Use Neon to cancel registration."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
 
 @app.post('/checkAccess')
 def checkAccess(gevent: models.GEvent):
