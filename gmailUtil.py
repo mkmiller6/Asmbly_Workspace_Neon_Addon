@@ -1,11 +1,9 @@
 import smtplib, ssl, logging
 
-from config import G_user, G_password
-
 #################################################################################
 # Sent a MIME email object to its recipient using GMail
 #################################################################################
-def sendMIMEmessage(MIMEmessage):
+def sendMIMEmessage(MIMEmessage, G_user, G_password):
     if not "@" in MIMEmessage['To']:
         raise ValueError("Message doesn't have a sane destination address")
 

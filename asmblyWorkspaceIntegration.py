@@ -34,25 +34,34 @@ app = FastAPI(title='Neon Workspace Integration')
 dev = True
 
 if dev:
+    BASE_URL = os.environ.get('BASE_URL')
     GCLOUD_PROJECT_ID = "gmail-neon-op-integration"
 
     client = secretmanager.SecretManagerServiceClient()
 
     secret_id = "static_keys"
 
-    name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{secret_id}/versions/latest"
+    static_keys = None
+    if keys := os.environ.get("secret_id", None):
+        static_keys = json.loads(keys)
 
-    secret = client.access_secret_version(request={"name": name})
+    if not isinstance(static_keys, dict):
 
-    # Verify payload checksum.
-    crc32c = google_crc32c.Checksum()
-    crc32c.update(secret.payload.data)
-    if secret.payload.data_crc32c != int(crc32c.hexdigest(), 16):
-        raise Exception("Checksum failed.")
-    
-    payload = secret.payload.data.decode("UTF-8")
+        name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{secret_id}/versions/latest"
 
-    static_keys = json.loads(payload)
+        secret = client.access_secret_version(request={"name": name})
+
+        # Verify payload checksum.
+        crc32c = google_crc32c.Checksum()
+        crc32c.update(secret.payload.data)
+        if secret.payload.data_crc32c != int(crc32c.hexdigest(), 16):
+            raise Exception("Checksum failed.")
+        
+        payload = secret.payload.data.decode("UTF-8")
+
+        static_keys = json.loads(payload)
+
+    os.environ["static_keys"] = payload
 
 else:
     static_keys = json.loads(os.environ.get('static_keys'))
@@ -158,9 +167,12 @@ def getUserKeys(creds: Credentials, userId: str):
         ).execute()
     firstName = user.get('names')[0].get('givenName').lower()
 
-    client = secretmanager.SecretManagerServiceClient()
-
     secret_id = firstName + '_' + userId
+
+    if keys := os.environ.get("secret_id", None):
+        return json.loads(keys)
+
+    client = secretmanager.SecretManagerServiceClient()
 
     name = f"projects/{GCLOUD_PROJECT_ID}/secrets/{secret_id}/versions/latest"
     try:
@@ -177,6 +189,8 @@ def getUserKeys(creds: Credentials, userId: str):
     payload = secret.payload.data.decode("UTF-8")
 
     keys = json.loads(payload)
+
+    os.environ["secret_id"] = json.dumps(keys)
 
     return keys
 
@@ -390,6 +404,14 @@ def classHomePage(gevent: models.GEvent):
 
     responseCard = card.build()
 
+    #print(responseCard)
+
+    responseCard["action"]["navigations"][0]["pushCard"]["sections"][1]["widgets"][0]["decoratedText"]["startIcon"] = {"knownIcon": "TICKET"}
+    responseCard["action"]["navigations"][0]["pushCard"]["sections"][1]["widgets"][0]["horizontalAlignment"] = "CENTER"
+    
+    responseCard["action"]["navigations"][0]["pushCard"]["sections"][2]["widgets"][0]["decoratedText"]["startIcon"] = {"knownIcon": "DOLLAR"}
+    responseCard["action"]["navigations"][0]["pushCard"]["sections"][2]["widgets"][0]["horizontalAlignment"] = "CENTER"
+    
     return {"renderActions":responseCard}
 
 #Push a card to the front of the stack that has all future classes of the searched Event Name. If a date is picked, 
@@ -505,7 +527,9 @@ def searchClasses(gevent: models.GEvent):
         "Event ID",
         "Event Name",
         "Event Start Date",
-        "Event Start Time"
+        "Event Start Time",
+        "Event Capacity",
+        "Registrants"
     ]
     outputFields = json.dumps(outputFields)
     try:
@@ -516,6 +540,8 @@ def searchClasses(gevent: models.GEvent):
         return responseCard
     
     if len(classResults["searchResults"]) > 0:
+        classes = classResults["searchResults"]
+        classes.sort(key=lambda x: x["Event Start Date"])
         responseCard = {
             "renderActions": {
                 "action": {
@@ -535,20 +561,29 @@ def searchClasses(gevent: models.GEvent):
                 }
             }
         }
-        for result in classResults["searchResults"]:
+        for result in classes:
+            maxAttendees = result["Event Capacity"]
+            event = neon.getEventRegistrants(result['Event ID'], apiKeys["N_APIkey"], NEON_API_USER)
+            currentAttendees = neon.getEventRegistrantCount(event["eventRegistrations"])
+            disabled = False
+            text = "Register"
+            if int(currentAttendees) == int(maxAttendees):
+                disabled = True
+                text = "Full"
             newWidget = {
                             "decorated_text": {
                                 "top_label": result["Event ID"],
-                                "text": result["Event Name"],
+                                "text": f"{result['Event Name']} ({currentAttendees}/{maxAttendees})",
                                 "bottom_label": result["Event Start Date"],
                                 "wrap_text": True,
                                 "button": {
-                                    "text": "Register",
+                                    "text": text,
                                     "on_click": {
                                         "action": {
                                             "function": BASE_URL + app.url_path_for('classReg')
                                         }
-                                    }
+                                    },
+                                    "disabled": disabled
                                 }
                             }
                         }
@@ -596,27 +631,28 @@ async def classReg(gevent: models.GEvent):
         errorText = "<b>Error:</b> Multiple Neon accounts found. Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-    else:
-        accountFirstName = searchResult[0]["First Name"]
-        accountLastName = searchResult[0]["Last Name"]
-        accountID = searchResult[0]["Account ID"]
-        try:
-            neon.postEventRegistration(accountID, eventID, accountFirstName, accountLastName)
-        except:
-            errorText = "<b>Error:</b> Registration failed. Use Neon to register individual."
-            responseCard = createErrorResponseCard(errorText)
-            return responseCard
-        
-        cardSection1Paragraph1 = CardService.TextParagraph(text="<b>Successfully registered</b>")
 
-        cardSection1 = CardService.CardSection(widget=[cardSection1Paragraph1])
+    accountFirstName = searchResult[0]["First Name"]
+    accountLastName = searchResult[0]["Last Name"]
+    accountID = searchResult[0]["Account ID"]
 
-        card = CardService.CardBuilder(section=[cardSection1])
-
-        responseCard = card.build()
-
+    try:
+        neon.postEventRegistration(accountID, eventID, accountFirstName, accountLastName, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+    except:
+        errorText = "<b>Error:</b> Registration failed. Use Neon to register individual."
+        responseCard = createErrorResponseCard(errorText)
         return responseCard
-        
+    
+    cardSection1Paragraph1 = CardService.TextParagraph(text="<b>Successfully registered</b>")
+
+    cardSection1 = CardService.CardSection(widget=[cardSection1Paragraph1])
+
+    card = CardService.CardBuilder(section=[cardSection1])
+
+    responseCard = card.build()
+
+    return {"renderActions": responseCard}
+    
 
 #Pushes card to front of stack showing all classes the user is currrently registered for. Each class is shown
 # as its own widget with a corresponding button to cancel the registration for that class.
@@ -679,6 +715,13 @@ def getAcctRegClassCancel(gevent: models.GEvent):
         for _, upcomingClass in iter:
             cardSection1DecoratedText1Button1Action1 = CardService.Action(
                 function_name = BASE_URL + app.url_path_for('classCancel'),
+                parameters = {
+                    "regID": upcomingClass["regID"],
+                    "eventID": upcomingClass["eventID"],
+                    "startDate": upcomingClass["startDate"],
+                    "eventName": upcomingClass["eventName"],
+                    "neonID": neonID
+                }
             )
             cardSection1DecoratedText1Button1 = CardService.TextButton(
                 text = "Cancel",
@@ -744,13 +787,15 @@ def classCancel(gevent: models.GEvent):
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
-    regId = gevent.commonEventObject.formInputs.get('decorated_txt_top_label')
-    className = gevent.commonEventObject.formInputs.get('decorated_txt')
-    classDate = gevent.commonEventObject.formInputs.get('decorated_txt_bottom_label')
+    regId = gevent.commonEventObject.parameters.get('regID')
+    eventID = gevent.commonEventObject.parameters.get('eventID')
+    className = gevent.commonEventObject.parameters.get('eventName')
+    classDate = gevent.commonEventObject.parameters.get('startDate')
+    neonId = gevent.commonEventObject.parameters.get('neonID')
 
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
-    os.environ[f"current_class_id_{userId}"] = regId
+    #os.environ[f"current_class_id_{userId}"] = regId
 
     cardSection1TextParagraph1 = CardService.TextParagraph(
         text = f"Are you sure you want to cancel the registration for {className} on {classDate}?"
@@ -758,22 +803,27 @@ def classCancel(gevent: models.GEvent):
 
     cardSection1ButtonList1Button1Action1 = CardService.Action(
         function_name = BASE_URL + app.url_path_for('classCancelConfirm'),
+        parameters = {
+            "regID": regId,
+            "eventID": eventID,
+            "neonID": neonId
+        }
     )
 
     cardSection1ButtonList1Button1 = CardService.TextButton(
         text = "Yes",
         text_button_style=CardService.TextButtonStyle.TEXT,
-        action = cardSection1ButtonList1Button1Action1
+        on_click_action = cardSection1ButtonList1Button1Action1
     )
 
     cardSection1ButtonList1Button2Action1 = CardService.Action(
-        function_name = popCard(),
+        function_name = BASE_URL + app.url_path_for('popCard'),
     )
     
     cardSection1ButtonList1Button2 = CardService.TextButton(
         text = "No",
         text_button_style=CardService.TextButtonStyle.TEXT,
-        action = cardSection1ButtonList1Button2Action1
+        on_click_action = cardSection1ButtonList1Button2Action1
     )
     
     cardSection1ButtonList1 = CardService.ButtonSet(
@@ -790,7 +840,9 @@ def classCancel(gevent: models.GEvent):
         name = "classCancelCard"
     )
 
-    return card.build()
+    responseCard = card.build()
+
+    return {"renderActions": responseCard}
 
 @app.post('/classCancelConfirm')
 def classCancelConfirm(gevent: models.GEvent):
@@ -809,12 +861,15 @@ def classCancelConfirm(gevent: models.GEvent):
     
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
     
-    regId = os.environ[f"current_class_id_{userId}"]
+    #regId = os.environ[f"current_class_id_{userId}"]
+    regId = gevent.commonEventObject.parameters.get('regID')
+    eventID = gevent.commonEventObject.parameters.get('eventID')
+    neonId = gevent.commonEventObject.parameters.get('neonID')
 
     apiKeys = getUserKeys(creds, userId)
 
     try:
-        cancelResponse = neon.cancelClass(regId, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+        cancelResponse = neon.cancelClass(regId, eventId = eventID, neonId = neonId, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
     except:
         errorText = "<b>Error:</b> Cancelation failed. Check your authentication or use the Neon website."
         responseCard = createErrorResponseCard(errorText)
@@ -825,23 +880,23 @@ def classCancelConfirm(gevent: models.GEvent):
         )
 
         cardSection1ButtonList1Button1Action1 = CardService.Action(
-            function_name = popToClassPage(),
+            function_name = BASE_URL + app.url_path_for('popToClassPage'),
         )
 
         cardSection1ButtonList1Button1 = CardService.TextButton(
             text = "Return to Class Page",
             text_button_style=CardService.TextButtonStyle.TEXT,
-            action = cardSection1ButtonList1Button1Action1
+            on_click_action = cardSection1ButtonList1Button1Action1
         )
 
         cardSection1ButtonList1Button2Action1 = CardService.Action(
-            function_name = popToHome(),
+            function_name = BASE_URL + app.url_path_for('popToHome'),
         )
         
         cardSection1ButtonList1Button2 = CardService.TextButton(
             text = "Return to Home Page",
             text_button_style=CardService.TextButtonStyle.TEXT,
-            action = cardSection1ButtonList1Button2Action1
+            on_click_action = cardSection1ButtonList1Button2Action1
         )
         
         cardSection1ButtonList1 = CardService.ButtonSet(
@@ -857,15 +912,17 @@ def classCancelConfirm(gevent: models.GEvent):
             section=[cardSection1],
             name = "classCancelConfirmationCard"
         )
+
+        responseCard = card.build()
  
-        return card.build()
+        return {"renderActions": responseCard}
     else:
         errorText = f"<b>Error:</b> Cancelation failed with status code {cancelResponse.status_code}. Use Neon to cancel registration."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
 
-
+@app.post('/popCard')
 def popCard():
 
     popOneCard = CardService.Navigation().popCard()
@@ -874,9 +931,9 @@ def popCard():
         navigation = popOneCard
     )
 
-    return response
+    return response.build()
 
-
+@app.post('/popToClassPage')
 def popToClassPage():
     returnToClassPage = CardService.Navigation().popToNamedCard(
         card_name  = "classHomePage"
@@ -887,9 +944,9 @@ def popToClassPage():
         state_changed = True
     )
 
-    return response 
+    return response.build()
 
-
+@app.post('/popToHome')
 def popToHome():
     returnToHome = CardService.Navigation().popToRoot()
 
@@ -898,7 +955,7 @@ def popToHome():
         state_changed = True
     )
 
-    return response
+    return response.build()
 
 #@app.post('/classRefund')
 
@@ -930,7 +987,7 @@ def checkAccess(gevent: models.GEvent):
         input = gevent.commonEventObject.formInputs.get('checkAccess').get('stringInputs').get('value')[0]
         if input.isdigit():
             neonID = int(input)
-            acct = neonUtil.getMemberById(neonID)
+            acct = neonUtil.getMemberById(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
             if acct.get('WaiverDate'):
                 waiverBoolean = True
             if acct.get('FacilityTourDate'):
@@ -1052,12 +1109,12 @@ def updateOP(gevent: models.GEvent):
     if isinstance(gevent.commonEventObject.formInputs.get('updateOpenpath'), dict) and gevent.commonEventObject.formInputs.get('updateOpenpath').get('stringInputs').get('value')[0]:
         input = gevent.commonEventObject.formInputs.get('updateOpenpath').get('stringInputs').get('value')[0]
         if input.isdigit():
-            acct = neonUtil.getMemberById(int(input))
+            acct = neonUtil.getMemberById(int(input), N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
             if not acct.get('WaiverDate') or not acct.get('FacilityTourDate') or not acct.get('Membership Start Date'):
                 errorText = "Account has not completed all access requirements. Use the Check Access button to find out what's missing."
                 responseCard = createErrorResponseCard(errorText)
                 return responseCard
-            openPathUpdateSingle(int(input))
+            openPathUpdateSingle(int(input), N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER, O_APIkey=apiKeys['O_APIkey'], O_APIuser=apiKeys['O_APIuser'], G_user=G_USER, G_pass=G_PASS)
             return responseCard
 
         else:
@@ -1083,9 +1140,191 @@ def updateOP(gevent: models.GEvent):
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
-    openPathUpdateSingle(neonID)
+    openPathUpdateSingle(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER, O_APIkey=apiKeys['O_APIkey'], O_APIuser=apiKeys['O_APIuser'], G_user=G_USER, G_pass=G_PASS)
 
     return responseCard
+
+@app.post('/giftCertSearch')
+def giftCertSearch(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    certNumber = gevent.commonEventObject.formInputs.get('giftCertNum').get('stringInputs').get('value')[0]
+
+    if not certNumber.isdigit():
+        errorText = "<b>Error:</b> Gift certificate number must be a number."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    apiKeys = getUserKeys(creds, userId)
+
+    searchFields = f'''
+[
+    {{
+        "field": "Shopping Cart ID",
+        "operator": "EQUAL",
+        "value": "{certNumber}"
+    }}
+]
+'''
+
+    outputFields = '''
+[
+    "Account ID",
+    "First Name",
+    "Last Name",
+    "Email 1"
+]
+'''
+
+    response = neon.postOrderSearch(searchFields, outputFields, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
+
+    searchResults = response.get("searchResults")
+
+    if len(searchResults) == 0:
+        errorText = "<b>Error:</b> No gift certificate found with that number."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    cardSection1DecoratedText1 = CardService.DecoratedText(
+        text = searchResults[0]['First Name'] + ' ' + searchResults[0]['Last Name'],
+        bottom_label = searchResults[0]['Email 1'],
+        top_label = "Neon ID: " + searchResults[0]['Account ID'],
+    )
+
+    cardSection1 = CardService.CardSection(
+        widget = [cardSection1DecoratedText1],
+        header = "Gift Certificate Purchaser"
+    )
+
+    card = CardService.CardBuilder(
+        section = [cardSection1]
+    )
+
+    responseCard = card.build()
+
+    return {"renderActions": responseCard}
+
+@app.post('/composeTrigger')
+def composeTrigger(gevent: models.GEvent):
+    token = gevent.authorizationEventObject.systemIdToken
+    if not verifyGoogleToken(token):
+        errorText = "<b>Error:</b> Unauthorized."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+
+    try:
+        creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    except:
+        errorText = "<b>Error:</b> Credentials not found."
+        responseCard = createErrorResponseCard(errorText)
+        return responseCard
+    
+    userId = decodeUser(gevent.authorizationEventObject.userIdToken)
+
+    """ with build('gmail', 'v1', credentials=creds) as gmailClient:
+        messageToken = gevent.gmail.accessToken
+        messageId = gevent.gmail.messageId
+
+        toEmail = gmailClient.users().messages().get(
+            userId='me', 
+            id=messageId, 
+            #accessToken=messageToken, 
+            format='metadata', 
+            metadataHeaders='To') \
+                .execute().get('payload').get('headers')[0].get('value')
+        
+        if toEmail == 'membership@asmbly.org':
+            currentDraftId = gmailClient.users().drafts().list(
+                userId='me',
+                includeSpamTrash=False
+            ).execute().get('drafts')[0].get('id')
+
+            body = {
+                'id': currentDraftId,
+                'message': {
+                    'payload': {
+                        'headers': [
+                            {
+                                'name': 'CC',
+                                'value': 'membership@asmbly.org'
+                            }
+                        ]
+                    }
+                }
+            }
+
+            update = gmailClient.users().drafts().update(
+                userId='me',
+                id=currentDraftId,
+                body=body
+            ).execute()
+
+    cardSection1TextParagraph1 = CardService.TextParagraph(
+        text = "Email headers updated."
+    )
+
+    cardSection1 = CardService.CardSection(
+        widget = [cardSection1TextParagraph1]
+    )
+
+    card = CardService.CardBuilder(
+        section=[cardSection1]
+    )
+
+    responseCard = card.build() """
+
+    response = {
+                "action": {
+                    "navigations": [
+                        {
+                            "pushCard": {
+                                "sections": [
+                                    {
+                                        "collapsible": False,
+                                        "uncollapsible_widgets_count": 1,
+                                        "widgets": [
+                                            {
+                                                "textParagraph": {
+                                                    "text": "Email headers updated."
+                                                }
+                                            }
+                                        ],
+                                    }
+                                ]
+                            }
+                        }]
+                },
+                "hostAppAction": {
+                    "gmailAction": {
+                        "updateDraftActionMarkup": {
+                            "updateCcRecipients": {
+                                "ccRecipients": [
+                                    {
+                                        "email": "membership@asmbly.org"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        
+
+    return response
+                
 
 @app.post('/settings')
 def settings(gevent: models.GEvent):
@@ -1361,8 +1600,30 @@ def home(gevent: models.GEvent):
         button = [cardSection1ButtonList2Button1]
     )
 
+    cardSection1Divider2 = CardService.Divider()
+
+    cardSection1TextInput3 = CardService.TextInput(
+        field_name = "giftCertNum",
+        title = "Gift Certificate Number",
+        multiline = False
+    )
+
+    cardSection1ButtonList3Button1Action1 = CardService.Action(
+        function_name = BASE_URL + app.url_path_for('giftCertSearch')
+    )
+
+    cardSection1ButtonList3Button1 = CardService.TextButton(
+        text = "Lookup",
+        text_button_style=CardService.TextButtonStyle.TEXT,
+        on_click_action = cardSection1ButtonList3Button1Action1
+    )
+
+    cardSection1ButtonList3 = CardService.ButtonSet(
+        button = [cardSection1ButtonList3Button1]
+    )
+
     cardSection1 = CardService.CardSection(
-        widget = [cardSection1TextInput1, cardSection1ButtonList1, cardSection1Divider1, cardSection1TextInput2, cardSection1ButtonList2],
+        widget = [cardSection1TextInput1, cardSection1ButtonList1, cardSection1Divider1, cardSection1TextInput2, cardSection1ButtonList2, cardSection1Divider2, cardSection1TextInput3, cardSection1ButtonList3],
         header = "Home"
     )
 

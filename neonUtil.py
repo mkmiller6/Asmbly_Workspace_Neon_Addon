@@ -7,21 +7,24 @@ import base64
 import datetime, pytz
 import requests
 import logging
+from functools import lru_cache
 
 #I'm not absolutely certain NeonCRM thinks it's in central time, but it's in the ballpark.
 #pacific time might be slightly more accurate.  Maybe I'll ask their support.
 today = datetime.datetime.now(pytz.timezone("America/Chicago")).date()
 yesterday = today - datetime.timedelta(days=1)
 
-from config import N_APIkey, N_APIuser
-
 dryRun = False
 
-# Neon Account Info
-N_auth = f'{N_APIuser}:{N_APIkey}'
 N_baseURL = 'https://api.neoncrm.com/v2'
-N_signature = base64.b64encode(bytearray(N_auth.encode())).decode()
-N_headers = {'Content-Type':'application/json','Authorization': f'Basic {N_signature}'}
+
+@lru_cache
+def getHeaders(N_APIkey, N_APIuser):
+    N_auth = f'{N_APIuser}:{N_APIkey}'
+    N_signature = base64.b64encode(bytearray(N_auth.encode())).decode()
+    N_headers = {'Content-Type': 'application/json',
+                'Authorization': f'Basic {N_signature}'}
+    return N_headers
 
 #Strings relevant to Neon account management
 STAFF_TYPE = "Paid Staff"
@@ -35,7 +38,7 @@ WIKI_ADMIN_TYPE = "Wiki Admin"
 ####################################################################
 # Update the OpenPathID stored in Neon for an account
 ####################################################################
-def updateOpenPathID(account: dict):
+def updateOpenPathID(account: dict, N_APIkey, N_APIuser):
     assert(int(account.get("Account ID")) > 0)
 
     OpId = "null"
@@ -60,7 +63,7 @@ def updateOpenPathID(account: dict):
 '''
     url = N_baseURL + f'/accounts/{account.get("Account ID")}' + '?category=Account'
     if not dryRun:
-        response = requests.patch(url, data=data, headers=N_headers)
+        response = requests.patch(url, data=data, headers=getHeaders(N_APIkey, N_APIuser))
         if (response.status_code != 200):
             raise ValueError(f'Patch {url} returned status code {response.status_code}')
     else:
@@ -69,7 +72,7 @@ def updateOpenPathID(account: dict):
 ####################################################################
 # Update the DiscourseID stored in Neon for an account
 ####################################################################
-def updateDID(account: dict):
+def updateDID(account: dict, N_APIkey, N_APIuser):
     assert(int(account.get("Account ID")) > 0)
     assert(account.get("DiscourseID") is not None)
 
@@ -88,7 +91,7 @@ def updateDID(account: dict):
 '''
     url = N_baseURL + f'/accounts/{account.get("Account ID")}' + '?category=Account'
     if not dryRun:
-        response = requests.patch(url, data=data, headers=N_headers)
+        response = requests.patch(url, data=data, headers=getHeaders(N_APIkey, N_APIuser))
         if (response.status_code != 200):
             raise ValueError(f'Patch {url} returned status code {response.status_code}')
     else:
@@ -98,14 +101,14 @@ def updateDID(account: dict):
 ####################################################################
 # Update a valid Neon account to include membership information
 ####################################################################
-def appendMemberships(account: dict, detailed=False):
+def appendMemberships(account: dict, N_APIkey, N_APIuser, detailed=False):
     #this should be a pretty thorough check for sane argument
     assert(int(account.get("Account ID")) > 0)
 
     #Neon counts a failed renewal as a valid subscription so long as automatic renewal is enabled.
     #WE only think a subscription is valid if the payment transaction was successful, so check payment status.
     url = N_baseURL + f'/accounts/{account.get("Account ID")}/memberships'
-    response = requests.get(url, headers=N_headers)
+    response = requests.get(url, headers=getHeaders(N_APIkey, N_APIuser))
 
     if (response.status_code != 200):
         raise ValueError(f'Get {url} returned status code {response.status_code}')
@@ -183,9 +186,9 @@ def appendMemberships(account: dict, detailed=False):
 ####################################################################
 # Given a Neon member ID, return an account including membership info
 ####################################################################
-def getMemberById(id: int, detailed = False):
+def getMemberById(id: int, N_APIkey, N_APIuser, detailed = False):
     url = N_baseURL + f'/accounts/{id}'
-    response = requests.get(url, headers=N_headers)
+    response = requests.get(url, headers=getHeaders(N_APIkey, N_APIuser))
 
     if (response.status_code != 200):
         raise ValueError(f'Get {url} returned status code {response.status_code}')
@@ -214,7 +217,7 @@ def getMemberById(id: int, detailed = False):
     account["Account ID"] = account.get("accountId")
 
     #This only contains basic account info.  We have to fetch the membership data separately
-    account = appendMemberships(account, detailed=detailed)
+    account = appendMemberships(account, N_APIkey, N_APIuser, detailed=detailed)
     return account
 
 ####################################################################
@@ -233,7 +236,7 @@ def fixTypes(account: dict):
 ####################################################################
 # Get Neon accounts matching given criteria
 ####################################################################
-def getNeonAccounts(searchFields, neonAccountDict = {}):
+def getNeonAccounts(searchFields, N_APIkey, N_APIuser, neonAccountDict = {}):
     #Output Fields
     #85 is DiscourseId
     #77 is OrientationDate
@@ -270,7 +273,7 @@ def getNeonAccounts(searchFields, neonAccountDict = {}):
 }}
 '''
         url = N_baseURL + '/accounts/search'
-        response = requests.post(url, data=data, headers=N_headers)
+        response = requests.post(url, data=data, headers=getHeaders(N_APIkey, N_APIuser))
 
         if (response.status_code != 200):
             raise ValueError(f'Post {url} returned status code {response.status_code}')
@@ -292,7 +295,7 @@ def getNeonAccounts(searchFields, neonAccountDict = {}):
 ####################################################################
 # Get all accounts in neon with OP IDs but no memberships 
 ####################################################################
-def getOrphanOpAccounts(neonAccountDict = {}):
+def getOrphanOpAccounts(N_APIkey, N_APIuser, neonAccountDict = {}):
     searchFields = '''[
     {
         "field": "Membership Expiration Date",
@@ -304,12 +307,12 @@ def getOrphanOpAccounts(neonAccountDict = {}):
     }
 ]'''
 
-    return getNeonAccounts(searchFields, neonAccountDict = neonAccountDict)
+    return getNeonAccounts(searchFields, N_APIkey, N_APIuser, neonAccountDict = neonAccountDict)
 
 ####################################################################
 # Get all accounts in neon with Discourse IDs but no memberships 
 ####################################################################
-def getOrphanDiscourseAccounts(neonAccountDict = {}):
+def getOrphanDiscourseAccounts(N_APIkey, N_APIuser, neonAccountDict = {},):
     searchFields = '''[
     {
         "field": "Membership Expiration Date",
@@ -321,13 +324,13 @@ def getOrphanDiscourseAccounts(neonAccountDict = {}):
     }
 ]'''
 
-    return getNeonAccounts(searchFields, neonAccountDict = neonAccountDict)
+    return getNeonAccounts(searchFields, N_APIkey, N_APIuser, neonAccountDict = neonAccountDict)
 
 ####################################################################
 # Get all members in Neon without subscription details
 # Should we make a synthetic type for "Members" and combine this with getByType? 
 ####################################################################
-def getMembersFast(neonAccountDict = {}):
+def getMembersFast(N_APIkey, N_APIuser, neonAccountDict = {}):
     searchFields = '''[
     {
         "field": "Membership Expiration Date",
@@ -335,12 +338,12 @@ def getMembersFast(neonAccountDict = {}):
     }
 ]'''
 
-    return getNeonAccounts(searchFields, neonAccountDict = neonAccountDict)
+    return getNeonAccounts(searchFields, N_APIkey, N_APIuser, neonAccountDict = neonAccountDict)
 
 ####################################################################
 # Get all accounts of a given type in Neon without subscription details
 ####################################################################
-def getAccountsByType(type: str, neonAccountDict = {}):
+def getAccountsByType(type: str, N_APIkey, N_APIuser, neonAccountDict = {}):
     searchFields = f'''[
     {{
         "field": "Individual Type",
@@ -349,21 +352,21 @@ def getAccountsByType(type: str, neonAccountDict = {}):
     }}
 ]'''
 
-    return getNeonAccounts(searchFields, neonAccountDict = neonAccountDict)
+    return getNeonAccounts(searchFields, N_APIkey, N_APIuser, neonAccountDict = neonAccountDict)
 
 ####################################################################
 # Get all staf and current/past members from Neon, incuding detailed subscription info
 ####################################################################
-def getRealAccounts():
+def getRealAccounts(N_APIkey, N_APIuser):
     accountCount = 0
     activeSubscriptions = 0
 
-    neonAccountDict = getMembersFast()
+    neonAccountDict = getMembersFast(N_APIkey, N_APIuser)
     #Staff accounts might not have any membership records
-    neonAccountDict = getAccountsByType(STAFF_TYPE, neonAccountDict = neonAccountDict)
+    neonAccountDict = getAccountsByType(STAFF_TYPE, N_APIkey, N_APIuser, neonAccountDict = neonAccountDict)
     #former Staff accounts might not have any membership records
-    neonAccountDict = getOrphanDiscourseAccounts(neonAccountDict = neonAccountDict)
-    neonAccountDict = getOrphanOpAccounts(neonAccountDict = neonAccountDict)
+    neonAccountDict = getOrphanDiscourseAccounts(N_APIkey, N_APIuser, neonAccountDict = neonAccountDict)
+    neonAccountDict = getOrphanOpAccounts(N_APIkey, N_APIuser, neonAccountDict = neonAccountDict)
 
     #some progress logging
     num_pings = 5
@@ -399,7 +402,7 @@ def getRealAccounts():
             neonAccountDict[account]["validMembership"] = False
             continue
 
-        neonAccountDict[account] = appendMemberships(neonAccountDict[account])
+        neonAccountDict[account] = appendMemberships(neonAccountDict[account], N_APIkey, N_APIuser)
 
         if neonAccountDict[account].get("validMembership"):
             activeSubscriptions += 1

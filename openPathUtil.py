@@ -9,12 +9,14 @@ from base64 import b64encode
 import datetime, pytz
 import requests
 import logging
+import json
+import os
 from pprint import pprint
+from functools import lru_cache
 
 import neonUtil
 import AsmblyMessageFactory
 import gmailUtil
-from config import O_APIkey, O_APIuser
 
 #OpenPath Group IDs
 GROUP_MANAGEMENT = 23174
@@ -34,20 +36,22 @@ def isManagedGroup(group: int):
     
 dryRun = False
 
-### OpenPath Account Info
-O_auth      = f'{O_APIuser}:{O_APIkey}'
-#Asmbly is OpenPath org ID 5231
-O_baseURL   = 'https://api.openpath.com/orgs/5231'
-O_signature = b64encode(bytearray(O_auth.encode())).decode()
-O_headers   = {'Authorization': f'Basic {O_signature}', 'Accept': 'application/json', "Content-Type": "application/json"}
+O_baseURL = 'https://api.openpath.com/orgs/5231'
+
+@lru_cache
+def getHeaders(O_APIkey, O_APIuser):
+    O_auth = f'{O_APIuser}:{O_APIkey}'
+    O_signature = b64encode(bytearray(O_auth.encode())).decode()
+    O_headers   = {'Authorization': f'Basic {O_signature}', 'Accept': 'application/json', "Content-Type": "application/json"}
+    return O_headers
 
 ####################################################################
 # Get all defined OpenPath users
 ####################################################################
-def getAllUsers():
+def getAllUsers(O_APIkey, O_APIuser):
     ### NOTE this GET has a limit of 1000 users.  If we grow that big, this will be the least of our problems
     url = O_baseURL + f'/users?offset=0&sort=identity.lastName&order=asc'
-    response = requests.get(url, headers=O_headers)
+    response = requests.get(url, headers=getHeaders(O_APIkey, O_APIuser))
 
     if (response.status_code != 200):
         raise ValueError(f'Get {url} returned status code {response.status_code}')
@@ -61,9 +65,9 @@ def getAllUsers():
 ####################################################################
 # Get a single OpenPath user by OpenPath ID
 ####################################################################
-def getUser(opId:int):
+def getUser(opId:int, O_APIkey, O_APIuser):
     url = O_baseURL + f'/users/{opId}'
-    response = requests.get(url, headers=O_headers)
+    response = requests.get(url, headers=getHeaders(O_APIkey, O_APIuser))
 
     if (response.status_code != 200):
         raise ValueError(f'Get {url} returned status code {response.status_code}')
@@ -73,12 +77,12 @@ def getUser(opId:int):
 ####################################################################
 # Deactivate (ie mark as deleted) an OpenPath user by ID
 ####################################################################
-def deactivateUser(opId:int):
+def deactivateUser(opId:int, O_APIkey, O_APIuser):
     url = O_baseURL + f'/users/{opId}/status'
     data = '''{"status": "I"}'''
     logging.debug(f'''PUT to {url} {pformat(data)}''')
 
-    response=requests.put(url, data=data, headers=O_headers)
+    response=requests.put(url, data=data, headers=getHeaders(O_APIkey, O_APIuser))
     if (response.status_code != 204):
         raise ValueError(f'Put {url} returned status code {response.status_code}; expected 200')
 
@@ -87,10 +91,10 @@ def deactivateUser(opId:int):
 # NOTE that acutally deleted users no longer show up in access logs
 # USE WITH EXTREME CAUTION
 ####################################################################
-def reallyActuallyDeleteUser(opId:int):
+def reallyActuallyDeleteUser(opId:int, O_APIkey, O_APIuser):
     logging.warn(f'''ACTUALLY DELETING OpenPath User {opId}! User will no longer show up in logs!''')
     url = O_baseURL + f'/users/{opId}'
-    response = requests.delete(url, headers=O_headers)
+    response = requests.delete(url, headers=getHeaders(O_APIkey, O_APIuser))
 
     #A successful delete call returns 204 "NO DATA"
     if (response.status_code != 204):
@@ -99,12 +103,12 @@ def reallyActuallyDeleteUser(opId:int):
 ####################################################################
 # Given an OpenPath ID, return group membership
 ####################################################################
-def getGroupsById(id):
+def getGroupsById(id, O_APIkey, O_APIuser):
     if not id:
         return []
 
     url = O_baseURL + f'/users/{id}/groups'
-    response = requests.get(url, headers=O_headers)
+    response = requests.get(url, headers=getHeaders(O_APIkey, O_APIuser))
 
     if (response.status_code != 200):
         raise ValueError(f'Get {url} returned status code {response.status_code}')
@@ -114,12 +118,12 @@ def getGroupsById(id):
 ####################################################################
 # fetch all credentials for given OpenPath ID
 ####################################################################
-def getCredentialsForId(id:int):
+def getCredentialsForId(id:int, O_APIkey, O_APIuser):
     #this should be a pretty thorough check for sane argument
     assert(int(id) > 0)
 
     url = O_baseURL + f'''/users/{id}/credentials?offset=0&sort=id&order=asc'''
-    response = requests.get(url, headers=O_headers)
+    response = requests.get(url, headers=getHeaders(O_APIkey, O_APIuser))
     if (response.status_code != 200):
         raise ValueError(f'Get {url} returned status code {response.status_code}')
 
@@ -128,32 +132,32 @@ def getCredentialsForId(id:int):
 ####################################################################
 # Delete a single credential
 ####################################################################
-def deleteCredential(userId: int, credentialId: int):
+def deleteCredential(userId: int, credentialId: int, O_APIkey, O_APIuser):
     url = O_baseURL + f'''/users/{userId}/credentials/{credentialId}'''
-    response = requests.delete(url, headers=O_headers)
+    response = requests.delete(url, headers=getHeaders(O_APIkey, O_APIuser))
     if (response.status_code != 204):
         raise ValueError(f'Delete {url} returned status code {response.status_code}; expected 204')
 
 ####################################################################
 # Delete all credentials for given OpenPath ID
 ####################################################################
-def deleteAllCredentialsForId(id:int):
+def deleteAllCredentialsForId(id:int, O_APIkey, O_APIuser):
     #this should be a pretty thorough check for sane argument
     assert(int(id) > 0)
 
-    credentials = getCredentialsForId(id)
+    credentials = getCredentialsForId(id, O_APIkey, O_APIuser)
 
     for credential in credentials:
         if credential.get("id"):
             logging.info("Deleting credential found in stale OpenPath user")
-            deleteCredential(id, credential.get("id"))
+            deleteCredential(id, credential.get("id"), O_APIkey, O_APIuser)
         else:
             logging.warning(f'''Malformed credential in stale OpenPath user {neonAccount.get("primaryContact").get("email1")}''')
 
 #################################################################################
 # Remove given openPath user from all groups
 #################################################################################
-def disableAccount(neonAccount):
+def disableAccount(neonAccount, O_APIkey, O_APIuser):
     #this should be a pretty thorough check for sane argument
     assert(int(neonAccount.get("OpenPathID")) > 0)
 
@@ -166,7 +170,7 @@ def disableAccount(neonAccount):
     url = O_baseURL + f'''/users/{neonAccount.get("OpenPathID")}/groupIds'''
     logging.debug(f'''PUT to {url} {pformat(data)}''')
     if not dryRun:
-        response = requests.put(url, data=data, headers=O_headers)
+        response = requests.put(url, data=data, headers=getHeaders(O_APIkey, O_APIuser))
         if (response.status_code != 204):
             raise ValueError(f'Put {url} returned status code {response.status_code}; expected 204')
         else:
@@ -210,7 +214,7 @@ def getOpGroups(neonAccount):
 #################################################################################
 # Given a Neon account and optionally an OpenPath user, perform necessary updates
 #################################################################################
-def updateGroups(neonAccount, openPathGroups=None, email=False):
+def updateGroups(neonAccount, O_APIkey, O_APIuser, G_user, G_pass, openPathGroups=None, email=False):
     if not neonAccount.get("OpenPathID"):
         logging.error("No OpenPathID found to update groups")
         return
@@ -219,9 +223,9 @@ def updateGroups(neonAccount, openPathGroups=None, email=False):
     assert(int(neonAccount.get("OpenPathID")) > 0)
 
     if openPathGroups is None:
-        openPathGroups = getGroupsById(neonAccount.get("OpenPathID"))
+        openPathGroups = getGroupsById(neonAccount.get("OpenPathID"), O_APIkey, O_APIuser)
 
-    neonOpGroups = getOpGroups(neonAccount)
+    neonOpGroups = getOpGroups(neonAccount, O_APIkey, O_APIuser)
 
     opGroupArray = []
     for group in openPathGroups:
@@ -250,7 +254,7 @@ def updateGroups(neonAccount, openPathGroups=None, email=False):
         url = O_baseURL + f'''/users/{neonAccount.get("OpenPathID")}/groupIds'''
         logging.debug(f'''PUT to {url} {pformat(data)}''')
         if not dryRun:
-            response = requests.put(url, data=data, headers=O_headers)
+            response = requests.put(url, data=data, headers=getHeaders(O_APIkey, O_APIuser))
             if (response.status_code != 204):
                 raise ValueError(f'Put {url} returned status code {response.status_code}; expected 204')
             else:
@@ -262,11 +266,11 @@ def updateGroups(neonAccount, openPathGroups=None, email=False):
     if (email):
         if len(opGroupArray) == 0:
             #account went from no groups to some groups
-            gmailUtil.sendMIMEmessage(AsmblyMessageFactory.getOpenPathEnableMessage(neonAccount.get("Email 1"), neonAccount.get("fullName")))
+            gmailUtil.sendMIMEmessage(AsmblyMessageFactory.getOpenPathEnableMessage(neonAccount.get("Email 1"), neonAccount.get("fullName")), G_user, G_pass)
 
         if len(neonOpGroups) == 0:
             #account went from some groups to no groups
-            gmailUtil.sendMIMEmessage(AsmblyMessageFactory.getOpenPathDisableMessage(neonAccount.get("Email 1"), neonAccount.get("fullName")))
+            gmailUtil.sendMIMEmessage(AsmblyMessageFactory.getOpenPathDisableMessage(neonAccount.get("Email 1"), neonAccount.get("fullName")), G_user, G_pass)
 
         if not neonUtil.accountHasFacilityAccess(neonAccount):
             ##these account types always have factility access even if their term expires.  Note the exception in the log.
@@ -278,7 +282,7 @@ def updateGroups(neonAccount, openPathGroups=None, email=False):
 #################################################################################
 # Create OpenPath user for given Neon account if it doesn't exist
 #################################################################################
-def createUser(neonAccount):
+def createUser(neonAccount, O_APIkey, O_APIuser, N_APIkey, N_APIuser):
     logging.info(f'Adding OP account for {neonAccount.get("fullName")}')
 
     data = f'''
@@ -294,7 +298,7 @@ def createUser(neonAccount):
     url = O_baseURL + '/users'
     logging.debug(f'''POST to {url} {pformat(data)}''')
     if not dryRun:
-        response = requests.post(url, data=data, headers=O_headers)
+        response = requests.post(url, data=data, headers=getHeaders(O_APIkey, O_APIuser))
         if (response.status_code != 201):
             logging.error(f'''Status {response.status_code} (expected 201) creating OpenPath User {pformat(data)} ''')
             return neonAccount
@@ -310,13 +314,13 @@ def createUser(neonAccount):
             #TODO make sure no other Neon record has this OpenPathID associated
 
             #first, find and delete any existing (stale) credentials
-            deleteAllCredentialsForId(opUser.get("id"))
+            deleteAllCredentialsForId(opUser.get("id"), O_APIkey, O_APIuser)
 
             #do a user patch to update the name and metadata
             #...confirmed that updating FirstName and LastName fixes initials and FullName too
             url = O_baseURL + f'''/users/{opUser.get("id")}'''
             logging.debug(f'''PATCH to {url} {pformat(data)}''')
-            response=requests.patch(url, data=data, headers=O_headers)
+            response=requests.patch(url, data=data, headers=getHeaders(O_APIkey, O_APIuser))
             if (response.status_code != 200):
                 raise ValueError(f'Patch {url} returned status code {response.status_code}; expected 200')
 
@@ -325,7 +329,7 @@ def createUser(neonAccount):
 
         #Update our local copy of the account so we don't have to fetch again
         neonAccount["OpenPathID"]=opUser.get("id")
-        neonUtil.updateOpenPathID(neonAccount)
+        neonUtil.updateOpenPathID(neonAccount, N_APIkey, N_APIuser)
     else:
         logger.warn("DryRun in openPathUtil.createUser()")
 
@@ -334,7 +338,7 @@ def createUser(neonAccount):
 #################################################################################
 # Create and Activate OpenPath mobile credential for given Neon account
 #################################################################################
-def createMobileCredential(neonAccount):
+def createMobileCredential(neonAccount, O_APIkey, O_APIuser):
     if not neonAccount.get("OpenPathID"):
         logging.error("No OpenPathID found to create mobile credential")
         return
@@ -352,7 +356,7 @@ def createMobileCredential(neonAccount):
     url = O_baseURL + f'/users/{neonAccount.get("OpenPathID")}/credentials'
     logging.debug(f'''POST to {url} {pformat(data)}''')
     if not dryRun:
-        response = requests.post(url, data=data, headers=O_headers)
+        response = requests.post(url, data=data, headers=getHeaders(O_APIkey, O_APIuser))
         if (response.status_code != 201):
             raise ValueError(f'Post {url} returned status code {response.status_code}; expected 201')
 
@@ -361,7 +365,7 @@ def createMobileCredential(neonAccount):
             httpVerb = 'POST'
             url = O_baseURL + f'/users/{neonAccount.get("OpenPathID")}/credentials/{response.json().get("data").get("id")}/setupMobile'
             logging.debug(f'''POST to {url}''')
-            response = requests.post(url, headers=O_headers)
+            response = requests.post(url, headers=getHeaders(O_APIkey, O_APIuser))
             if (response.status_code != 204):
                 raise ValueError(f'Post {url} returned status code {response.status_code}; expected 204')
         else:
@@ -372,13 +376,13 @@ def createMobileCredential(neonAccount):
 #################################################################################
 # Given a single Neon ID, perform necessary OpenPath updates
 #################################################################################
-def updateOpenPathByNeonId(neonId):
+def updateOpenPathByNeonId(neonId, O_APIkey, O_APIuser, N_APIkey, N_APIuser):
     logging.info(f"Updating Neon ID {neonId}")
-    account = neonUtil.getMemberById(neonId)
+    account = neonUtil.getMemberById(neonId, N_APIkey, N_APIuser)
     #logging.debug(account)
     if account.get("OpenPathID"):
-        updateGroups(account, email=True)
+        updateGroups(account, O_APIkey, O_APIuser, email=True)
     elif neonUtil.accountHasFacilityAccess(account):
         account = createUser(account)
-        updateGroups(account, groups=[]) #pass empty groups list to skip the http get
-        createMobileCredential(account)
+        updateGroups(account, O_APIkey, O_APIuser, groups=[]) #pass empty groups list to skip the http get
+        createMobileCredential(account, O_APIkey, O_APIuser)

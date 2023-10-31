@@ -12,16 +12,16 @@ logging.basicConfig(
          level=logging.INFO,
          datefmt='%Y-%m-%d %H:%M:%S')
 
-def openPathUpdateSingle(neonID):
-    account = neonUtil.getMemberById(neonID)
+def openPathUpdateSingle(neonID, N_APIkey, N_APIuser, O_APIkey, O_APIuser, G_user, G_pass):
+    account = neonUtil.getMemberById(neonID, N_APIkey, N_APIuser)
     if account.get("OpenPathID"):
-        openPathUtil.updateGroups(account)
+        openPathUtil.updateGroups(account, O_APIkey, O_APIuser, G_user, G_pass)
         #note that this isn't necessarily 100% accurate, because we have Neon users with provisioned OpenPath IDs and no access groups
         #assuming that typical users who gained and lost openPath access have a signed waiver
     elif neonUtil.accountHasFacilityAccess(account):
-        account = openPathUtil.createUser(account)
-        openPathUtil.updateGroups(account, openPathGroups=[]) #pass empty groups list to skip the http get
-        openPathUtil.createMobileCredential(account)
+        account = openPathUtil.createUser(account, O_APIkey, O_APIuser, N_APIkey, N_APIuser)
+        openPathUtil.updateGroups(account, O_APIkey, O_APIuser, G_user, G_pass, openPathGroups=[]) #pass empty groups list to skip the http get
+        openPathUtil.createMobileCredential(account, O_APIkey, O_APIuser)
     elif account.get("validMembership"):
         if not account.get("WaiverDate"):
             logging.info(f'''{account.get("fullName")} ({account.get("Email 1")}) is missing the Waiver''')

@@ -297,42 +297,44 @@ def postEventRegistration(accountID, eventID, accountFirstName, accountLastName,
     resourcePath = '/eventRegistrations'
     queryParams = ''
     data = {
-        "id": "string",
-        "payments": [
-            {
-                "id": "string",
-                "amount": 0,
-                "paymentStatus": "Succeeded",
-                "tenderType": 0,
-                "receivedDate": datetime.datetime.today().isoformat()
-            }
-        ],
-        "donorCoveredFeeFlag": False,
         "eventId": eventID,
-        "donorCoveredFee": 0,
-        "taxDeductibleAmount": 0,
         "sendSystemEmail": True,
         "registrationAmount": 0,
         "ignoreCapacity": False,
         "registrantAccountId": accountID,
+        "registrationDateTime": f"{datetime.datetime.today().isoformat(timespec='seconds')}Z",
         "tickets": [
             {
                 "attendees": [
                     {
-                        "attendeeId": 0,
                         "accountId": accountID,
                         "firstName": accountFirstName,
                         "lastName": accountLastName,
-                        "markedAttended": True,
+                        "markedAttended": False,
                         "registrantAccountId": accountID,
                         "registrationStatus": "SUCCEEDED",
-                        "registrationDate": datetime.datetime.today().isoformat()
+                        "registrationDate": datetime.datetime.today().isoformat(timespec='seconds'),
                     }
                 ]
             }
-        ]
+        ],
+        "totalCharge": 0
     }
     data = json.dumps(data)
+
+    # Neon Account Info
+    N_headers = getHeaders(N_APIkey, N_APIuser)
+
+    url = N_baseURL + resourcePath + queryParams
+    responseEvents = apiCall(httpVerb, url, data, N_headers)
+
+    return responseEvents
+
+def getAccountEventRegistrations(neonId, N_APIkey, N_APIuser):
+    httpVerb = 'GET'
+    resourcePath = f'/accounts/{neonId}/eventRegistrations'
+    queryParams = '?sortColumn=registrationDateTime&sortDirection=DESC'
+    data = ''
 
     # Neon Account Info
     N_headers = getHeaders(N_APIkey, N_APIuser)
@@ -342,10 +344,10 @@ def postEventRegistration(accountID, eventID, accountFirstName, accountLastName,
 
     return responseEvents
 
-def getAccountEventRegistrations(neonId, N_APIkey, N_APIuser):
+def getAccountSingleEventRegistration(neonId, eventId, N_APIkey, N_APIuser):
     httpVerb = 'GET'
     resourcePath = f'/accounts/{neonId}/eventRegistrations'
-    queryParams = '?sortColumn=registrationDateTime&sortDirection=DESC'
+    queryParams = f'?sortColumn=registrationDateTime&sortDirection=DESC&eventId={eventId}'
     data = ''
 
     # Neon Account Info
@@ -370,15 +372,21 @@ def getEvent(eventId, N_APIkey, N_APIuser):
 
     return responseEvent
 
-def cancelClass(registrationId, N_APIkey, N_APIuser):
+def cancelClass(registrationId, eventId: str, neonId: str, N_APIkey, N_APIuser):
     httpVerb = 'PATCH'
     resourcePath = f'/eventRegistrations/{registrationId}'
     queryParams = ''
+    reg = getAccountSingleEventRegistration(neonId, eventId, N_APIkey, N_APIuser).get('eventRegistrations')[0]
+    #ticketId = reg.get("tickets")[0].get("ticketId")
+    attendeeId = reg.get("tickets")[0].get("attendees")[0].get("attendeeId")
     data = {
+        "eventId": eventId,
+        "registrantAccountId": neonId,
         "tickets": [
             {
                 "attendees": [
                     {
+                        "attendeeId": attendeeId,
                         "registrationStatus": "CANCELED",
                     }
                 ]
