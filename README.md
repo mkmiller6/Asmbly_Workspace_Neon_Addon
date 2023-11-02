@@ -3,7 +3,7 @@
 This Google Workspace add-on allows users within the Asmbly domain to perform common tasks within Neon and Openpath 
 without needing to leave Gmail. The goal is to reduce context switching and thus speedup routine tasks.
 
-Actions withtin the add-on are split into contextual and non-contextual categories. Contextual actions are available
+Actions within the add-on are split into contextual and non-contextual categories. Contextual actions are available
 when the user has an email open. The add-on will determine the Neon/OP account based on the email address of the open
 email. Non-contextual actions are available without any emails open.
 
@@ -19,7 +19,7 @@ Capabilites of the add-on include:
     - Checking the access requirements of any user via the input Neon ID or email address
     - Updating a user's Openpath access based on Neon ID or email address
     - Looking up the purchaser of a gift certificate by gift certificate number
-    - One-click CCing of membership@asmbly.org when composing emails
+    - One-click CCing of the membership alias when composing emails
 
 ## Add-on Installation and Setup
 
