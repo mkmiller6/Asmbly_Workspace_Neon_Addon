@@ -45,3 +45,5 @@ Google has excellent [documentation](https://developers.google.com/workspace/add
 on building Google Workspace Add-ons in alternate runtimes (i.e. not in Google Apps Script). To help facilitate 
 returning properly formatted JSON cards, this project uses a modified version of the 
 [GAPPS package](https://github.com/skoudoro/gapps).
+
+All API endpoints can be viewed [here](https://gmail-addon-7y5gpb2q7q-vp.a.run.app/docs).
