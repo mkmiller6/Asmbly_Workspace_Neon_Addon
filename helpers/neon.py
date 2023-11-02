@@ -2,6 +2,7 @@ from pprint import pprint
 import base64
 import json
 import datetime
+from functools import lru_cache
 
 from helpers.api import apiCall
 
@@ -11,6 +12,7 @@ N_baseURL = 'https://api.neoncrm.com/v2'
 #####   NEON EVENTS   #####
 ###########################
 
+@lru_cache
 def getHeaders(N_APIkey, N_APIuser):
     N_auth = f'{N_APIuser}:{N_APIkey}'
     N_signature = base64.b64encode(bytearray(N_auth.encode())).decode()
