@@ -12,3 +12,4 @@ AppsScriptCards
 deploymentResource.json
 .DS_Store
 classCancelTest.py
+.dockerignore

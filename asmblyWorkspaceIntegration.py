@@ -14,7 +14,7 @@ import neonUtil
 from fastapi import FastAPI
 from functools import lru_cache
 
-from gapps import CardService
+from gapps import cardservice as CardService
 from gapps.cardservice import models
 from gapps.cardservice import utilities
 from gapps.cardservice.api import SelectionItem
@@ -31,7 +31,7 @@ import google_crc32c
 
 app = FastAPI(title='Neon Workspace Integration')
 
-dev = True
+dev = False
 
 if dev:
     BASE_URL = os.environ.get('BASE_URL')
@@ -65,6 +65,7 @@ if dev:
 
 else:
     static_keys = json.loads(os.environ.get('static_keys'))
+    BASE_URL = static_keys.get("base_url")
 
 GCLOUD_PROJECT_ID = static_keys.get("project_id")
 CLIENT_ID = static_keys.get("client_id")
@@ -268,7 +269,9 @@ async def getNeonId(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
-    
+    if not apiKeys.get("N_APIkey"):
+        return apiKeys
+
     acctEmail = getFromGmailEmail(gevent, creds)
 
     searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
@@ -405,7 +408,9 @@ def searchClasses(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
-    
+    if not apiKeys.get("N_APIkey"):
+        return apiKeys
+
     if gevent.commonEventObject.formInputs["className"]["stringInputs"]["value"][0]:
         eventName = gevent.commonEventObject.formInputs["className"]["stringInputs"]["value"][0]
     else:
@@ -599,7 +604,9 @@ async def classReg(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
-    
+    if not apiKeys.get("N_APIkey"):
+        return apiKeys
+
     acctEmail = getFromGmailEmail(gevent, creds)
 
     searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
@@ -664,7 +671,9 @@ def getAcctRegClassCancel(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
-    
+    if not apiKeys.get("N_APIkey"):
+        return apiKeys
+
     acctEmail = getFromGmailEmail(gevent, creds)
 
     searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
@@ -762,7 +771,6 @@ def getAcctRegClassCancel(gevent: models.GEvent):
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
-# TODO: 
 @app.post('/getAcctRegClassRefund')
 def getAcctRegClassRefund(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
@@ -781,7 +789,9 @@ def getAcctRegClassRefund(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
-    
+    if not apiKeys.get("N_APIkey"):
+        return apiKeys
+
     acctEmail = getFromGmailEmail(gevent, creds)
 
     searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
@@ -968,6 +978,8 @@ def classCancelConfirm(gevent: models.GEvent):
     neonId = gevent.commonEventObject.parameters.get('neonID')
 
     apiKeys = getUserKeys(creds, userId)
+    if not apiKeys.get("N_APIkey"):
+        return apiKeys
 
     try:
         cancelResponse = neon.cancelClass(regId, 
@@ -1149,6 +1161,8 @@ def classRefundConfirm(gevent: models.GEvent):
     neonId = gevent.commonEventObject.parameters.get('neonID')
 
     apiKeys = getUserKeys(creds, userId)
+    if not apiKeys.get("N_APIkey"):
+        return apiKeys
 
     try:
         cancelResponse = neon.refundClass(eventId = eventID, 
@@ -1226,6 +1240,8 @@ def checkAccess(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
+    if not apiKeys.get("N_APIkey"):
+        return apiKeys
 
     waiverBoolean = False
     orientBoolean = False
@@ -1337,6 +1353,8 @@ def updateOP(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
+    if not apiKeys.get("N_APIkey") or not apiKeys.get("O_APIkey") or not apiKeys.get("O_APIuser"):
+        return apiKeys
 
     cardSection1TextParagraph1 = CardService.TextParagraph(
         text = "Account Openpath has been updated."
@@ -1442,6 +1460,8 @@ def giftCertSearch(gevent: models.GEvent):
     userId = decodeUser(gevent.authorizationEventObject.userIdToken)
 
     apiKeys = getUserKeys(creds, userId)
+    if not apiKeys.get("N_APIkey"):
+        return apiKeys
 
     searchFields = f'''
 [
@@ -1606,23 +1626,32 @@ def settings(gevent: models.GEvent):
         errorText = "<b>Error:</b> Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
-
+    
+    creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
+    try:
+        keys = getUserKeys(creds, decodeUser(gevent.authorizationEventObject.userIdToken))
+    except:
+        pass
+        
     cardSection1TextInput1 = CardService.TextInput(
         field_name = "neonAPIKey",
         title = "Neon API Key",
-        multiline = False
+        multiline = False,
+        hint = keys.get('N_APIkey', '')
     )
 
     cardSection1TextInput2 = CardService.TextInput(
         field_name = "openPathAPIUser",
         title = "OpenPath API User",
-        multiline = False
+        multiline = False,
+        hint = keys.get('O_APIuser', '')
     )
 
     cardSection1TextInput3 = CardService.TextInput(
         field_name = "openPathAPIKey",
         title = "Openpath API Key",
-        multiline = False
+        multiline = False,
+        hint = keys.get('O_APIkey', '')
     )
 
     cardSection1ButtonList1Button1Action1 = CardService.Action(
