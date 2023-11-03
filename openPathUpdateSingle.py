@@ -14,14 +14,17 @@ logging.basicConfig(
 
 def openPathUpdateSingle(neonID, N_APIkey, N_APIuser, O_APIkey, O_APIuser, G_user, G_pass):
     account = neonUtil.getMemberById(neonID, N_APIkey, N_APIuser)
+    success = False
     if account.get("OpenPathID"):
         openPathUtil.updateGroups(account, O_APIkey, O_APIuser, G_user, G_pass)
         #note that this isn't necessarily 100% accurate, because we have Neon users with provisioned OpenPath IDs and no access groups
         #assuming that typical users who gained and lost openPath access have a signed waiver
+        success = True
     elif neonUtil.accountHasFacilityAccess(account):
         account = openPathUtil.createUser(account, O_APIkey, O_APIuser, N_APIkey, N_APIuser)
         openPathUtil.updateGroups(account, O_APIkey, O_APIuser, G_user, G_pass, openPathGroups=[]) #pass empty groups list to skip the http get
         openPathUtil.createMobileCredential(account, O_APIkey, O_APIuser)
+        success = True
     elif account.get("validMembership"):
         if not account.get("WaiverDate"):
             logging.info(f'''{account.get("fullName")} ({account.get("Email 1")}) is missing the Waiver''')
@@ -29,6 +32,8 @@ def openPathUpdateSingle(neonID, N_APIkey, N_APIuser, O_APIkey, O_APIuser, G_use
             logging.info(f'''{account.get("fullName")} ({account.get("Email 1")}) is missing the Facility Tour''')
     elif not account.get("validMembership"):
         logging.info(f'''{account.get("fullName")} ({account.get("Email 1")}) does not have an active membership''')
+
+    return success
 
 
 #begin standalone script functionality -- update single account provided on command line

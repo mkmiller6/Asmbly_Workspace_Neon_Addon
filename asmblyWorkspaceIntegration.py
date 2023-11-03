@@ -31,7 +31,7 @@ import google_crc32c
 
 app = FastAPI(title='Neon Workspace Integration')
 
-dev = False
+dev = True
 
 if dev:
     BASE_URL = os.environ.get('BASE_URL')
@@ -202,7 +202,10 @@ def getUserKeys(creds: Credentials, userId: str):
 def createErrorResponseCard(errorText: str):
     cardSection1TextParagraph1 = CardService.TextParagraph(text=errorText)
 
-    cardSection1 = CardService.CardSection(widget=[cardSection1TextParagraph1])
+    cardSection1 = CardService.CardSection(
+        widget=[cardSection1TextParagraph1],
+        header="<b>Error</b>",
+        )
 
     card = CardService.CardBuilder(section=[cardSection1])
 
@@ -255,14 +258,14 @@ def getNeonAcctByEmail(accountEmail: str, N_APIkey: str, N_APIuser: str) -> dict
 async def getNeonId(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -293,12 +296,12 @@ async def getNeonId(gevent: models.GEvent):
 
         return {"renderActions": responseCard}
     elif len(searchResult) > 1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+        errorText = " Multiple Neon accounts found. \
             Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     else:
-        errorText = "<b>Error:</b> No Neon accounts found."
+        errorText = " No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
@@ -307,7 +310,7 @@ async def getNeonId(gevent: models.GEvent):
 def classHomePage(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -394,14 +397,14 @@ def classHomePage(gevent: models.GEvent):
 def searchClasses(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -414,7 +417,7 @@ def searchClasses(gevent: models.GEvent):
     if gevent.commonEventObject.formInputs["className"]["stringInputs"]["value"][0]:
         eventName = gevent.commonEventObject.formInputs["className"]["stringInputs"]["value"][0]
     else:
-        errorText = "<b>Error:</b> Event name is required."
+        errorText = " Event name is required."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     if gevent.commonEventObject.formInputs["startDate"]["dateInput"]["msSinceEpoch"] and \
@@ -518,7 +521,7 @@ def searchClasses(gevent: models.GEvent):
     try:
         classResults = neon.postEventSearch(searchFields, outputFields, apiKeys["N_APIkey"], NEON_API_USER)
     except:
-        errorText = "<b>Error:</b> Unable to find classes. Check your authentication or use the Neon website."
+        errorText = " Unable to find classes. Check your authentication or use the Neon website."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -564,10 +567,16 @@ def searchClasses(gevent: models.GEvent):
                                     "on_click": {
                                         "action": {
                                             "function": BASE_URL + app.url_path_for('classReg'),
-                                            "parameters": [{
-                                                "key": "eventID",
-                                                "value": result["Event ID"]
-                                        }]
+                                            "parameters": [
+                                                {
+                                                    "key": "eventID",
+                                                    "value": result["Event ID"]
+                                                },
+                                                {
+                                                    "key": "eventName",
+                                                    "value": result["Event Name"]
+                                                }
+                                            ]
                                         }
                                     },
                                     "disabled": disabled
@@ -590,14 +599,14 @@ def searchClasses(gevent: models.GEvent):
 async def classReg(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -612,13 +621,14 @@ async def classReg(gevent: models.GEvent):
     searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
 
     eventID = gevent.commonEventObject.parameters.get('eventID')
+    eventName = gevent.commonEventObject.parameters.get('eventName')
 
     if len(searchResult) == 0:
-        errorText = "<b>Error:</b> No Neon accounts found."
+        errorText = " No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     elif len(searchResult) > 1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+        errorText = " Multiple Neon accounts found. \
             Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
@@ -636,19 +646,26 @@ async def classReg(gevent: models.GEvent):
                                    N_APIuser=NEON_API_USER
                                    )
     except:
-        errorText = "<b>Error:</b> Registration failed. Use Neon to register individual."
+        errorText = " Registration failed. Use Neon to register individual."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
-    cardSection1Paragraph1 = CardService.TextParagraph(text="<b>Successfully registered</b>")
+    nav = CardService.Navigation().popToNamedCard(
+        card_name="classHomePage"
+    )
 
-    cardSection1 = CardService.CardSection(widget=[cardSection1Paragraph1])
+    notification = CardService.Notification(
+        text = f"Successfully registered {accountFirstName} for {eventName}."
+    )
 
-    card = CardService.CardBuilder(section=[cardSection1])
+    navAction = CardService.ActionResponseBuilder(
+        navigation = nav,
+        notification=notification
+    )
 
-    responseCard = card.build()
+    responseCard = navAction.build()
 
-    return {"renderActions": responseCard}
+    return responseCard
     
 
 #Pushes card to front of stack showing all classes the user is currrently registered for. Each class is shown
@@ -657,14 +674,14 @@ async def classReg(gevent: models.GEvent):
 def getAcctRegClassCancel(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -683,7 +700,7 @@ def getAcctRegClassCancel(gevent: models.GEvent):
         try:
             classDict = neon.getAccountEventRegistrations(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
         except:
-            errorText = "<b>Error:</b> Unable to find classes. Account may not have registered for any classes. \
+            errorText = " Unable to find classes. Account may not have registered for any classes. \
                 Alternaively, check your authentication or use the Neon website."
             responseCard = createErrorResponseCard(errorText)
             return responseCard
@@ -762,12 +779,12 @@ def getAcctRegClassCancel(gevent: models.GEvent):
         return {"renderActions": responseCard} 
                 
     elif len(searchResult) >1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+        errorText = " Multiple Neon accounts found. \
             Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     else:
-        errorText = "<b>Error:</b> No Neon accounts found."
+        errorText = " No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -775,14 +792,14 @@ def getAcctRegClassCancel(gevent: models.GEvent):
 def getAcctRegClassRefund(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -801,7 +818,7 @@ def getAcctRegClassRefund(gevent: models.GEvent):
         try:
             classDict = neon.getAccountEventRegistrations(neonID, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
         except:
-            errorText = "<b>Error:</b> Unable to find classes. Account may not have registered for any classes. \
+            errorText = " Unable to find classes. Account may not have registered for any classes. \
                 Alternaively, check your authentication or use the Neon website."
             responseCard = createErrorResponseCard(errorText)
             return responseCard
@@ -882,12 +899,12 @@ def getAcctRegClassRefund(gevent: models.GEvent):
         return {"renderActions": responseCard} 
                 
     elif len(searchResult) >1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+        errorText = " Multiple Neon accounts found. \
             Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     else:
-        errorText = "<b>Error:</b> No Neon accounts found."
+        errorText = " No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
@@ -896,7 +913,7 @@ def getAcctRegClassRefund(gevent: models.GEvent):
 def classCancel(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -959,14 +976,14 @@ def classCancel(gevent: models.GEvent):
 def classCancelConfirm(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -989,7 +1006,7 @@ def classCancelConfirm(gevent: models.GEvent):
                                           N_APIuser=NEON_API_USER
                                           )
     except:
-        errorText = "<b>Error:</b> Cancelation failed. Check your authentication or use the Neon website."
+        errorText = " Cancelation failed. Check your authentication or use the Neon website."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     if cancelResponse.status_code in range(200, 300):
@@ -1035,7 +1052,7 @@ def classCancelConfirm(gevent: models.GEvent):
  
         return {"renderActions": responseCard}
     else:
-        errorText = f"<b>Error:</b> Cancelation failed with status code {cancelResponse.status_code}. \
+        errorText = f" Cancelation failed with status code {cancelResponse.status_code}. \
             Use Neon to cancel registration."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
@@ -1059,8 +1076,7 @@ def popToClassPage():
     )
 
     response = CardService.ActionResponseBuilder(
-        navigation = returnToClassPage,
-        state_changed = True
+        navigation = returnToClassPage
     )
 
     return response.build()
@@ -1070,8 +1086,7 @@ def popToHome():
     returnToHome = CardService.Navigation().popToRoot()
 
     response = CardService.ActionResponseBuilder(
-        navigation = returnToHome,
-        state_changed = True
+        navigation = returnToHome
     )
 
     return response.build()
@@ -1080,7 +1095,7 @@ def popToHome():
 def classRefund(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1143,14 +1158,14 @@ def classRefund(gevent: models.GEvent):
 def classRefundConfirm(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1171,7 +1186,7 @@ def classRefundConfirm(gevent: models.GEvent):
                                           N_APIuser=NEON_API_USER
                                           )
     except:
-        errorText = "<b>Error:</b> Cancellation failed. Check your authentication or use the Neon website."
+        errorText = " Cancellation failed. Check your authentication or use the Neon website."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     if cancelResponse.status_code in range(200, 300):
@@ -1217,7 +1232,7 @@ def classRefundConfirm(gevent: models.GEvent):
  
         return {"renderActions": responseCard}
     else:
-        errorText = f"<b>Error:</b> Cancellation failed with status code {cancelResponse.status_code}. \
+        errorText = f" Cancellation failed with status code {cancelResponse.status_code}. \
             Use Neon to cancel registration."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
@@ -1226,14 +1241,14 @@ def classRefundConfirm(gevent: models.GEvent):
 def checkAccess(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1272,12 +1287,12 @@ def checkAccess(gevent: models.GEvent):
     if searchResult is not None:
 
         if len(searchResult) > 1:
-            errorText = "<b>Error:</b> Multiple Neon accounts found. \
+            errorText = " Multiple Neon accounts found. \
                 Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
             responseCard = createErrorResponseCard(errorText)
             return responseCard
         elif len(searchResult) == 0:
-            errorText = "<b>Error:</b> No Neon accounts found."
+            errorText = " No Neon accounts found."
             responseCard = createErrorResponseCard(errorText)
             return responseCard
     
@@ -1339,14 +1354,14 @@ def checkAccess(gevent: models.GEvent):
 def updateOP(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1355,28 +1370,6 @@ def updateOP(gevent: models.GEvent):
     apiKeys = getUserKeys(creds, userId)
     if not apiKeys.get("N_APIkey") or not apiKeys.get("O_APIkey") or not apiKeys.get("O_APIuser"):
         return apiKeys
-
-    cardSection1TextParagraph1 = CardService.TextParagraph(
-        text = "Account Openpath has been updated."
-    )
-
-    cardSection1 = CardService.CardSection(
-        widget = [cardSection1TextParagraph1]
-    )
-
-    card = CardService.CardBuilder(
-        section=[cardSection1]
-    )
-
-    builtCard = card.build()
-
-    nav = CardService.Navigation().pushCard(builtCard)
-
-    navAction = CardService.ActionResponseBuilder(
-        navigation = nav
-    )
-
-    responseCard = navAction.build()
 
     if isinstance(gevent.commonEventObject.formInputs.get('updateOpenpath'), dict) and \
         gevent.commonEventObject.formInputs.get('updateOpenpath').get('stringInputs').get('value')[0]:
@@ -1388,7 +1381,7 @@ def updateOP(gevent: models.GEvent):
                     Use the Check Access button to find out what's missing."
                 responseCard = createErrorResponseCard(errorText)
                 return responseCard
-            openPathUpdateSingle(int(input), 
+            success = openPathUpdateSingle(int(input), 
                                  N_APIkey=apiKeys['N_APIkey'], 
                                  N_APIuser=NEON_API_USER, 
                                  O_APIkey=apiKeys['O_APIkey'], 
@@ -1396,6 +1389,28 @@ def updateOP(gevent: models.GEvent):
                                  G_user=G_USER, 
                                  G_pass=G_PASS
                                  )
+            
+            nav = CardService.Navigation().popToRoot()
+
+            if success:
+                text = f"Account {input} has been updated."
+            else:
+                text = f"Account {input} was not updated. Check their access requirements and try again."
+
+            notification = CardService.Notification(
+                text = text
+            )
+
+            navAction = CardService.ActionResponseBuilder(
+                navigation = nav,
+                notification=notification,
+
+            )
+
+            responseCard = navAction.build()
+
+            responseCard["stateChanged"] = True
+
             return responseCard
 
         else:
@@ -1406,12 +1421,12 @@ def updateOP(gevent: models.GEvent):
         searchResult = getNeonAcctByEmail(acctEmail, N_APIkey=apiKeys['N_APIkey'], N_APIuser=NEON_API_USER)
 
     if len(searchResult) > 1:
-        errorText = "<b>Error:</b> Multiple Neon accounts found. \
+        errorText = " Multiple Neon accounts found. \
             Go to <a href=\"https://app.neonsso.com/login\">Neon</a> to merge duplicate accounts."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     elif len(searchResult) == 0:
-        errorText = "<b>Error:</b> No Neon accounts found."
+        errorText = " No Neon accounts found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
@@ -1424,7 +1439,7 @@ def updateOP(gevent: models.GEvent):
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
-    openPathUpdateSingle(neonID, 
+    success = openPathUpdateSingle(neonID, 
                          N_APIkey=apiKeys['N_APIkey'], 
                          N_APIuser=NEON_API_USER, 
                          O_APIkey=apiKeys['O_APIkey'], 
@@ -1432,6 +1447,24 @@ def updateOP(gevent: models.GEvent):
                          G_user=G_USER, 
                          G_pass=G_PASS
                          )
+    
+    nav = CardService.Navigation().popToNamedCard("home")
+
+    if success:
+        text = f"Account {neonID} has been updated."
+    else:
+        text = f"Account {neonID} was not updated. Check their access requirements and try again."
+
+    notification = CardService.Notification(
+        text = text
+    )
+
+    navAction = CardService.ActionResponseBuilder(
+        navigation = nav,
+        notification=notification
+    )
+
+    responseCard = navAction.build()
 
     return responseCard
 
@@ -1439,21 +1472,21 @@ def updateOP(gevent: models.GEvent):
 def giftCertSearch(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
     certNumber = gevent.commonEventObject.formInputs.get('giftCertNum').get('stringInputs').get('value')[0]
 
     if not certNumber.isdigit():
-        errorText = "<b>Error:</b> Gift certificate number must be a number."
+        errorText = " Gift certificate number must be a number."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1487,7 +1520,7 @@ def giftCertSearch(gevent: models.GEvent):
     searchResults = response.get("searchResults")
 
     if len(searchResults) == 0:
-        errorText = "<b>Error:</b> No gift certificate found with that number."
+        errorText = " No gift certificate found with that number."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1514,14 +1547,14 @@ def giftCertSearch(gevent: models.GEvent):
 def composeTrigger(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1623,7 +1656,7 @@ def composeTrigger(gevent: models.GEvent):
 def settings(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1692,14 +1725,14 @@ def settings(gevent: models.GEvent):
 def submitSettings(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
     try:
         creds = Credentials(gevent.authorizationEventObject.userOAuthToken)
     except:
-        errorText = "<b>Error:</b> Credentials not found."
+        errorText = " Credentials not found."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1754,29 +1787,28 @@ def submitSettings(gevent: models.GEvent):
         
     create_secret(client, GCLOUD_PROJECT_ID, secret_id, jsonSecretVersion)
 
-    cardSection1TextParagraph1 = CardService.TextParagraph(
-        text = "API Keys Updated."
+    text = "API Keys Updated."
+
+    nav = CardService.Navigation().updateCard()
+
+    notification = CardService.Notification(
+        text = text
     )
 
-    cardSection1 = CardService.CardSection(
-        widget = [cardSection1TextParagraph1]
+    navAction = CardService.ActionResponseBuilder(
+        navigation = nav,
+        notification=notification
     )
 
-    card = CardService.CardBuilder(
-        section=[cardSection1]
-    )
+    responseCard = navAction.build()
 
-    responseCard = card.build()
-
-    response = {"renderActions": responseCard}
-
-    return response
+    return responseCard
 
 @app.post('/contextualHome')
 def contextualHome(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
@@ -1867,7 +1899,7 @@ def contextualHome(gevent: models.GEvent):
 def home(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
-        errorText = "<b>Error:</b> Unauthorized."
+        errorText = " Unauthorized."
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
