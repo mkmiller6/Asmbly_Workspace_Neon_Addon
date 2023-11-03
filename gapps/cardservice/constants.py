@@ -116,6 +116,11 @@ class TextButtonStyle(Enum):
     TEXT = 'TEXT'
 
 
+class TextInputStyle(Enum):
+    SINGLE_LINE = 'SINGLE_LINE'
+    MULTIPLE_LINE = 'MULTIPLE_LINE'
+
+
 class UpdateDraftBodyType(Enum):
     IN_PLACE_INSERT = 'IN_PLACE_INSERT'
     INSERT_AT_START = 'INSERT_AT_START'
