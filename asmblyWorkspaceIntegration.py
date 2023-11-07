@@ -254,7 +254,7 @@ def getNeonAcctByEmail(accountEmail: str, N_APIkey: str, N_APIuser: str) -> dict
 
 #Pushes card to front of stack with Neon ID of account with associated email address, otherwise tell user there
 #are no Neon accounts associated with that email
-@app.post('/getNeonId')
+@app.post('/getNeonId', tags = ["User Info"], summary = "Get the user's Neon ID")
 async def getNeonId(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -306,7 +306,7 @@ async def getNeonId(gevent: models.GEvent):
         return responseCard
 
 #Create the class home page and push to front of stack
-@app.post('/classHomePage')
+@app.post('/classHomePage', tags = ["Classes"], summary = "Display the class home page")
 def classHomePage(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -393,7 +393,7 @@ def classHomePage(gevent: models.GEvent):
 #only classes on that date will be returned.
 #Every event is returned as its own widget with corresponding button. Clicking that button invokes /classReg to register 
 #the account for that class
-@app.post('/searchClasses')
+@app.post('/searchClasses', tags = ["Classes"], summary = "Get a list of classes that match the search criteria")
 def searchClasses(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -595,7 +595,7 @@ def searchClasses(gevent: models.GEvent):
 
 # Registers the active gmail user for the selected class with a $0 price. Pulls the eventID from the bottom label of the
 # previous card
-@app.post('/classReg')
+@app.post('/classReg', tags = ["Classes"], summary = "Register the user for the selected class")
 async def classReg(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -670,7 +670,7 @@ async def classReg(gevent: models.GEvent):
 
 #Pushes card to front of stack showing all classes the user is currrently registered for. Each class is shown
 # as its own widget with a corresponding button to cancel the registration for that class.
-@app.post('/getAcctRegClassCancel')
+@app.post('/getAcctRegClassCancel', tags=["Classes"])
 def getAcctRegClassCancel(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -788,7 +788,7 @@ def getAcctRegClassCancel(gevent: models.GEvent):
         responseCard = createErrorResponseCard(errorText)
         return responseCard
     
-@app.post('/getAcctRegClassRefund')
+@app.post('/getAcctRegClassRefund', tags=["Classes"], summary = "Get all future classes the user is registered for and build cancel button")
 def getAcctRegClassRefund(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -909,7 +909,7 @@ def getAcctRegClassRefund(gevent: models.GEvent):
         return responseCard
 
 #Cancels user's registration in class. 
-@app.post('/classCancel')
+@app.post('/classCancel' , tags=["Classes"], summary="Confirmation card for class cancellation")
 def classCancel(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -972,7 +972,7 @@ def classCancel(gevent: models.GEvent):
 
     return {"renderActions": responseCard}
 
-@app.post('/classCancelConfirm')
+@app.post('/classCancelConfirm', tags=["Classes"], summary="Execute the class cancellation")
 def classCancelConfirm(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1058,7 +1058,7 @@ def classCancelConfirm(gevent: models.GEvent):
         return responseCard
 
 
-@app.post('/popCard')
+@app.post('/popCard', tags = ["Navigation"], summary="Pop a card from the navigation stack")
 def popCard():
 
     popOneCard = CardService.Navigation().popCard()
@@ -1069,7 +1069,7 @@ def popCard():
 
     return response.build()
 
-@app.post('/popToClassPage')
+@app.post('/popToClassPage', tags = ["Navigation"], summary="Navigate back to the class home page")
 def popToClassPage():
     returnToClassPage = CardService.Navigation().popToNamedCard(
         card_name  = "classHomePage"
@@ -1081,7 +1081,7 @@ def popToClassPage():
 
     return response.build()
 
-@app.post('/popToHome')
+@app.post('/popToHome', tags = ["Navigation"], summary="Pop to the root of the card stack")
 def popToHome():
     returnToHome = CardService.Navigation().popToRoot()
 
@@ -1091,7 +1091,7 @@ def popToHome():
 
     return response.build()
 
-@app.post('/classRefund')
+@app.post('/classRefund', tags = ["Classes"], summary = "Display the refund confirmation card")
 def classRefund(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1154,7 +1154,7 @@ def classRefund(gevent: models.GEvent):
 
     return {"renderActions": responseCard}
 
-@app.post('/classRefundConfirm')
+@app.post('/classRefundConfirm', tags = ["Classes"], summary="Execute the refund for the class")
 def classRefundConfirm(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1237,7 +1237,7 @@ def classRefundConfirm(gevent: models.GEvent):
         responseCard = createErrorResponseCard(errorText)
         return responseCard
 
-@app.post('/checkAccess')
+@app.post('/checkAccess', tags = ["User Info"], summary = "Display the user's access requirements")
 def checkAccess(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1350,7 +1350,7 @@ def checkAccess(gevent: models.GEvent):
 
     return {"renderActions": responseCard}
 
-@app.post('/updateOP')
+@app.post('/updateOP', tags = ["User Info"], summary = "Update the user's Openpath access")
 def updateOP(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1468,7 +1468,8 @@ def updateOP(gevent: models.GEvent):
 
     return responseCard
 
-@app.post('/giftCertSearch')
+@app.post('/giftCertSearch', tags = ["User Info"], summary = "Get the purchaser's account info for the given gift \
+          certificate number")
 def giftCertSearch(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1543,7 +1544,7 @@ def giftCertSearch(gevent: models.GEvent):
 
     return {"renderActions": responseCard}
 
-@app.post('/composeTrigger')
+@app.post('/composeTrigger', tags = ["Drafts"], summary = "Add CC to draft email")
 def composeTrigger(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1652,7 +1653,7 @@ def composeTrigger(gevent: models.GEvent):
     return response
                 
 
-@app.post('/settings')
+@app.post('/settings', tags = ["Settings"], summary = "Display the API keys card")
 def settings(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1721,7 +1722,7 @@ def settings(gevent: models.GEvent):
     return responseCard
 
 
-@app.post('/submitSettings')
+@app.post('/submitSettings', tags = ["Settings"], summary = "Submit API keys")
 def submitSettings(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1804,7 +1805,7 @@ def submitSettings(gevent: models.GEvent):
 
     return responseCard
 
-@app.post('/contextualHome')
+@app.post('/contextualHome', tags = ["Navigation"], summary = "Display the contextual home card")
 def contextualHome(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
@@ -1895,7 +1896,7 @@ def contextualHome(gevent: models.GEvent):
 
     return responseCard
 
-@app.post('/home')
+@app.post('/home', tags = ["Navigation"], summary="Display the home card")
 def home(gevent: models.GEvent):
     token = gevent.authorizationEventObject.systemIdToken
     if not verifyGoogleToken(token):
